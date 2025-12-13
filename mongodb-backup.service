@@ -1,0 +1,13 @@
+[Unit]
+Description=MongoDB Backup and Sync Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/mongo-sync-backup
+ExecStart=/opt/mongo-sync-backup/venv/bin/python3 /opt/mongo-sync-backup/backup_manager.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

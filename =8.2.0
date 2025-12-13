@@ -1,0 +1,13 @@
+Collecting pycryptodome
+  Using cached pycryptodome-3.23.0-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (3.4 kB)
+Requirement already satisfied: tenacity in ./venv/lib/python3.12/site-packages (9.1.2)
+Requirement already satisfied: requests in ./venv/lib/python3.12/site-packages (2.32.5)
+Requirement already satisfied: pathlib in ./venv/lib/python3.12/site-packages (1.0.1)
+Requirement already satisfied: python-dotenv in ./venv/lib/python3.12/site-packages (1.2.1)
+Requirement already satisfied: charset_normalizer<4,>=2 in ./venv/lib/python3.12/site-packages (from requests) (3.4.4)
+Requirement already satisfied: idna<4,>=2.5 in ./venv/lib/python3.12/site-packages (from requests) (3.11)
+Requirement already satisfied: urllib3<3,>=1.21.1 in ./venv/lib/python3.12/site-packages (from requests) (2.6.2)
+Requirement already satisfied: certifi>=2017.4.17 in ./venv/lib/python3.12/site-packages (from requests) (2025.11.12)
+Using cached pycryptodome-3.23.0-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.3 MB)
+Installing collected packages: pycryptodome
+Successfully installed pycryptodome-3.23.0
