@@ -105,13 +105,43 @@ Unit=mongodb-backup.service
 WantedBy=timers.target
 """
 
+    report_service = f"""[Unit]
+Description=Daily MongoDB Backup Report
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory={install_path}
+ExecStart={install_path}/venv/bin/python3 {install_path}/report_manager.py
+Restart=on-failure
+"""
+
+    # Run daily at 08:00 AM
+    report_timer = """[Unit]
+Description=Send Daily MongoDB Backup Report
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Unit=mongodb-report.service
+
+[Install]
+WantedBy=timers.target
+"""
+
     with open("mongodb-backup.service", "w") as f:
         f.write(service_content)
     
     with open("mongodb-backup.timer", "w") as f:
         f.write(timer_content)
+
+    with open("mongodb-report.service", "w") as f:
+        f.write(report_service)
         
-    print("[+] Created systemd service files (mongodb-backup.service, mongodb-backup.timer).")
+    with open("mongodb-report.timer", "w") as f:
+        f.write(report_timer)
+        
+    print("[+] Created systemd service files (backup & report).")
     
     # 4. Init DB
     print("[*] Initializing SQLite DB...")

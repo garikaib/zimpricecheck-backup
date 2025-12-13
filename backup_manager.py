@@ -248,7 +248,7 @@ def main():
         # 4. Local Cleanup
         cleanup_local()
         
-        send_email("Backup Success", f"MongoDB backup and sync completed successfully.\nFile: {backup_file}\n(Skip Backup: {args.skip_backup})")
+        # Success email removed as per request. Only failures are emailed.
         log_job("COMPLETE", "Backup job finished successfully.")
         
     except Exception as e:

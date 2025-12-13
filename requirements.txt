@@ -2,3 +2,4 @@ tenacity>=8.2.0
 python-dotenv
 requests
 pycryptodome
+pytz

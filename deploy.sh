@@ -34,7 +34,7 @@ tar --exclude='./venv' \
 # 2. Ensure remote directory & Upload
 echo "Uploading bundle and setup script to $REMOTE_DIR..."
 ssh -t $REMOTE_HOST "sudo mkdir -p $REMOTE_DIR && sudo chown ubuntu:ubuntu $REMOTE_DIR"
-scp bundle.tar.zst remote_setup.sh $REMOTE_HOST:$REMOTE_DIR/
+scp bundle.tar.zst remote_setup.sh report_manager.py $REMOTE_HOST:$REMOTE_DIR/
 
 # 3. Remote Setup
 echo "Running remote setup..."
