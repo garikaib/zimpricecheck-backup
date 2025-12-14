@@ -260,7 +260,19 @@ def create_wp_content_backup(work_dir):
     log_job("INFO", f"Archiving wp-content from {WP_CONTENT_PATH}...")
     
     # Create tar archive of wp-content
-    cmd = ["tar", "-cf", archive_file, "-C", os.path.dirname(WP_CONTENT_PATH), "wp-content"]
+    # Exclude known cache directories
+    cmd = [
+        "tar", 
+        "--exclude=wp-content/cache", 
+        "--exclude=wp-content/w3tc-config", 
+        "--exclude=wp-content/uploads/cache",
+        "--exclude=wp-content/plugins/w3-total-cache/pub",
+        "--exclude=wp-content/node_modules",
+        "--exclude=wp-content/.git",
+        "-cf", archive_file, 
+        "-C", os.path.dirname(WP_CONTENT_PATH), 
+        "wp-content"
+    ]
     
     result = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
