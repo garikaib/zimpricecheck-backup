@@ -9,7 +9,7 @@ cd "$DIR"
 # because we use the venv's python binary directly.
 
 if [ -f "$DIR/venv/bin/python3" ]; then
-    echo "[*] Running Backup Manager..."
+    echo "[*] Running WordPress Backup Manager..."
     "$DIR/venv/bin/python3" "$DIR/backup_manager.py" "$@"
 else
     echo "[!] Virtual environment not found in $DIR/venv"

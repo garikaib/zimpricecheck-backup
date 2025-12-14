@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+.env
+*.pyc
+*.tar.zst
+backups/
+backups.db
+wp-backup-work/
+.idea/
+.vscode/
+*.log

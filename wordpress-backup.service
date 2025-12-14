@@ -1,0 +1,14 @@
+[Unit]
+Description=WordPress Backup Service
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Environment="TZ=Africa/Harare"
+WorkingDirectory=/opt/wordpress-backup
+ExecStart=/opt/wordpress-backup/venv/bin/python3 /opt/wordpress-backup/backup_manager.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

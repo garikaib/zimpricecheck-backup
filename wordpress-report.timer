@@ -1,0 +1,10 @@
+[Unit]
+Description=WordPress Backup Daily Report Timer
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Persistent=true
+Unit=wordpress-report.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=WordPress Backup Daily Report
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Environment="TZ=Africa/Harare"
+WorkingDirectory=/opt/wordpress-backup
+ExecStart=/opt/wordpress-backup/venv/bin/python3 /opt/wordpress-backup/report_manager.py
+Restart=on-failure
