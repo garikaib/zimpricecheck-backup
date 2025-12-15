@@ -59,6 +59,12 @@ chmod +x run.sh deploy.sh
 echo "[*] Creating backup directory..."
 mkdir -p "$INSTALL_DIR/backups"
 
+echo "[*] Ensuring temp directory permissions..."
+# Ensure default temp dir exists and is owned by ubuntu
+mkdir -p /var/tmp/wp-backup-work
+chown -R ubuntu:ubuntu /var/tmp/wp-backup-work
+chmod 775 /var/tmp/wp-backup-work
+
 echo "[*] Installing MEGAcmd if not present..."
 if ! command -v mega-login &> /dev/null; then
     echo "[*] Downloading MEGAcmd..."
