@@ -269,6 +269,7 @@ def create_wp_content_backup(work_dir):
         "--exclude=wp-content/plugins/w3-total-cache/pub",
         "--exclude=wp-content/node_modules",
         "--exclude=wp-content/.git",
+        "--exclude=wp-content/debug.log",
         "-cf", archive_file, 
         "-C", os.path.dirname(WP_CONTENT_PATH), 
         "wp-content"

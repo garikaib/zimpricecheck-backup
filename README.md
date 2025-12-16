@@ -159,7 +159,7 @@ Each backup archive (`wp-backup-YYYYMMDD-HHMMSS.tar.zst`) contains:
 1. **database.sql** - Full MariaDB dump with DROP TABLE statements
 2. **wp-config.php** - WordPress configuration file
 3. **wp-content.tar** - Tarball of the wp-content directory (themes, plugins, uploads)
-   - Excludes: `cache`, `w3tc-config`, `uploads/cache`, `node_modules`, `.git`
+   - Excludes: `cache`, `w3tc-config`, `uploads/cache`, `node_modules`, `.git`, `debug.log`
 
 ## Restore Procedure
 
