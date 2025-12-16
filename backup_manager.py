@@ -715,6 +715,7 @@ def run_backup():
     
     log_job("INFO", f"Working directory: {work_dir}")
     
+    filepath = None
     try:
         # 1. Backup database
         create_database_backup(work_dir)
@@ -742,6 +743,16 @@ def run_backup():
         log_job("COMPLETE", f"Backup completed: {filename} ({human_readable_size(file_size)}) -> {mega_account or 'local only'}")
         
         return filepath, filename, file_size, mega_account
+        
+    except Exception:
+        # If any step fails, clean up the final archive if it was created
+        if filepath and os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+                log_job("WARNING", f"Deleted failed backup artifact: {filepath}")
+            except Exception as cleanup_error:
+                log_job("ERROR", f"Failed to delete failed artifact: {cleanup_error}")
+        raise
         
     finally:
         # Always cleanup work directory
