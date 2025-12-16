@@ -108,7 +108,7 @@ def send_report(html_body):
         return
 
     msg = MIMEMultipart()
-    msg['From'] = SMTP_SENDER_EMAIL
+    msg['From'] = f"WordPress Backup <{SMTP_SENDER_EMAIL}>"
     msg['To'] = SMTP_USER
     msg['Subject'] = "WordPress Backup Daily Report"
 
