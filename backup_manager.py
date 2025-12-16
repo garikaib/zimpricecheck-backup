@@ -761,6 +761,48 @@ def run_backup():
             log_job("INFO", "Cleaned up work directory")
 
 
+def recover_orphaned_backups():
+    """Check for local backups that haven't been uploaded and upload them."""
+    try:
+        if not os.path.exists(BACKUP_DIR):
+            return
+
+        # Get list of local backup files
+        local_files = [f for f in os.listdir(BACKUP_DIR) if f.startswith("wp-backup-") and f.endswith(".tar.zst")]
+        
+        if not local_files:
+            return
+
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        
+        for filename in local_files:
+            # Check if recorded in DB
+            c.execute("SELECT id FROM mega_archives WHERE filename=?", (filename,))
+            result = c.fetchone()
+            
+            if not result:
+                filepath = os.path.join(BACKUP_DIR, filename)
+                file_size = os.path.getsize(filepath)
+                
+                log_job("WARNING", f"Found orphaned backup: {filename}. Attempting recovery upload...")
+                try:
+                    mega_account = upload_to_mega(filepath, filename, file_size)
+                    log_job("SUCCESS", f"Recovered orphan {filename} -> {mega_account}")
+                    
+                    # Cleanup old retention after successful recovery too
+                    cleanup_mega_retention()
+                    cleanup_local()
+                    
+                except Exception as e:
+                    log_job("ERROR", f"Failed to recover orphan {filename}: {e}")
+        
+        conn.close()
+            
+    except Exception as e:
+        log_job("ERROR", f"Error during orphan recovery: {e}")
+
+
 def main():
     """Main entry point."""
     import argparse
@@ -771,6 +813,10 @@ def main():
     
     init_db()
     log_job("START", "WordPress backup job started.")
+    
+    # Attempt to recover any orphaned backups from previous runs
+    if not args.dry_run:
+        recover_orphaned_backups()
     
     if args.dry_run:
         log_job("INFO", "DRY RUN MODE - No actual backup will be created")
