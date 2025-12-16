@@ -289,15 +289,22 @@ def create_final_archive(work_dir, backup_dir):
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     filename = f"wp-backup-{timestamp}.tar.zst"
     filepath = os.path.join(backup_dir, filename)
+    partial_path = filepath + ".part"
     
     log_job("INFO", "Creating final compressed archive...")
     
-    # Create final archive with zstd compression
-    cmd = f"tar -cf - -C {work_dir} . | zstd -T0 -19 > {filepath}"
+    # Create final archive with zstd compression - write to .part file first
+    cmd = f"tar -cf - -C {work_dir} . | zstd -T0 -19 > {partial_path}"
     
     result = subprocess.run(cmd, shell=True, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
+        # Clean up partial file on failure
+        if os.path.exists(partial_path):
+            os.remove(partial_path)
         raise Exception(f"Final archive creation failed: {result.stderr}")
+    
+    # Rename to final path (atomic operation)
+    os.rename(partial_path, filepath)
     
     size = os.path.getsize(filepath)
     log_job("SUCCESS", f"Final archive created: {filename} ({human_readable_size(size)})")
@@ -803,6 +810,26 @@ def recover_orphaned_backups():
         log_job("ERROR", f"Error during orphan recovery: {e}")
 
 
+def cleanup_stale_partials():
+    """Remove any .part files from interrupted previous runs."""
+    try:
+        if not os.path.exists(BACKUP_DIR):
+            return
+
+        partial_files = [f for f in os.listdir(BACKUP_DIR) if f.endswith(".part")]
+        
+        for filename in partial_files:
+            filepath = os.path.join(BACKUP_DIR, filename)
+            try:
+                os.remove(filepath)
+                log_job("WARNING", f"Cleaned up interrupted partial file: {filename}")
+            except Exception as e:
+                log_job("ERROR", f"Failed to remove partial file {filename}: {e}")
+                
+    except Exception as e:
+        log_job("ERROR", f"Error during partial cleanup: {e}")
+
+
 def main():
     """Main entry point."""
     import argparse
@@ -813,6 +840,10 @@ def main():
     
     init_db()
     log_job("START", "WordPress backup job started.")
+    
+    # Clean up any partial files from interrupted previous runs
+    if not args.dry_run:
+        cleanup_stale_partials()
     
     # Attempt to recover any orphaned backups from previous runs
     if not args.dry_run:
