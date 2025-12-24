@@ -22,6 +22,7 @@ import json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
+from d1_manager import D1Manager
 
 # Load environment variables
 load_dotenv()
@@ -992,6 +993,14 @@ def run_backup():
         raise
         
     finally:
+        # Synch D1 at the end
+        try:
+            d1 = D1Manager()
+            if d1.enabled:
+                d1.sync_all()
+        except Exception as e:
+            print(f"Final D1 sync failed: {e}")
+
         # Always cleanup work directory
         if os.path.exists(work_dir):
             shutil.rmtree(work_dir)
@@ -1080,6 +1089,16 @@ def main():
         return
     
     init_db()
+    
+    # Sync with Cloudflare D1
+    try:
+        d1 = D1Manager()
+        if d1.enabled:
+            print("[INFO] Syncing with Cloudflare D1...")
+            d1.sync_all()
+    except Exception as e:
+        print(f"[WARNING] Initial D1 sync failed: {e}")
+
     log_job("START", "WordPress backup job started.")
     
     # Clean up any partial files from interrupted previous runs

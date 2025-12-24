@@ -18,6 +18,14 @@ for arg in "$@"; do
         FOREGROUND=true
         shift
         ;;
+        --db-sync)
+        if [ -f "$DIR/venv/bin/python3" ]; then
+            exec "$DIR/venv/bin/python3" "$DIR/lib/d1_manager.py"
+        else
+            echo "[!] Virtual environment not found."
+            exit 1
+        fi
+        ;;
         *)
         ARGS="$ARGS $arg"
         ;;
@@ -27,12 +35,12 @@ done
 if [ -f "$DIR/venv/bin/python3" ]; then
     # Helper to check status
     check_status() {
-        "$DIR/venv/bin/python3" "$DIR/backup_manager.py" --check
+        "$DIR/venv/bin/python3" "$DIR/lib/backup_manager.py" --check
     }
     
     if [ "$FOREGROUND" = true ]; then
         echo "[*] Running WordPress Backup Manager (Foreground)..."
-        "$DIR/venv/bin/python3" "$DIR/backup_manager.py" $ARGS
+        "$DIR/venv/bin/python3" "$DIR/lib/backup_manager.py" $ARGS
     else
         # Check if running
         STATUS_OUT=$(check_status)
@@ -43,7 +51,8 @@ if [ -f "$DIR/venv/bin/python3" ]; then
         fi
 
         echo "[*] Starting WordPress Backup Manager in background..."
-        nohup "$DIR/venv/bin/python3" "$DIR/backup_manager.py" $ARGS > /dev/null 2>&1 &
+       # Run backup manager
+nohup "$DIR/venv/bin/python3" "$DIR/lib/backup_manager.py" $ARGS > /dev/null 2>&1 &
         echo "[+] Process started. PID: $!"
         echo "    You will receive an email upon completion."
         echo "    Run this script again to see status."

@@ -1,13 +1,14 @@
 #!/bin/bash
+# Deployment Script
 
 REMOTE_HOST="ubuntu@wp.zimpricecheck.com"
 REMOTE_PORT="2200"
 REMOTE_DIR="/opt/wordpress-backup"
 
 # 0. Check Local Config
-if [ ! -f ".env" ] || [ ! -f "wordpress-backup.service" ]; then
+if [ ! -f ".env" ]; then
     echo "Configuration missing. Running setup wizard locally..."
-    python3 configure.py
+    ./configure.sh
     if [ ! -f ".env" ]; then
         echo "Setup aborted."
         exit 1
@@ -23,7 +24,8 @@ if ! command -v zstd &> /dev/null; then
     exit 1
 fi
 
-# Create tarball compressed with zstd, excluding unwanted files
+# Create tarball compressed with zstd
+# Explicitly include .env, lib, configure.sh, run.sh, requirements.txt
 tar --exclude='./venv' \
     --exclude='./.git' \
     --exclude='./__pycache__' \
@@ -50,66 +52,67 @@ if [ ! -d "venv" ]; then
 fi
 
 echo "[*] Installing Python dependencies..."
-./venv/bin/pip install --upgrade pip
-./venv/bin/pip install -r requirements.txt
+./venv/bin/pip install --upgrade pip -q
+./venv/bin/pip install -r requirements.txt -q
 
 echo "[*] Setting permissions..."
-chmod +x run.sh deploy.sh
+chmod +x run.sh configure.sh lib/*.py
 
-echo "[*] Creating backup directory..."
-mkdir -p "$INSTALL_DIR/backups"
-
-echo "[*] Ensuring temp directory permissions..."
-# Ensure default temp dir exists and is owned by ubuntu
-mkdir -p /var/tmp/wp-backup-work
-chown -R ubuntu:ubuntu /var/tmp/wp-backup-work
-chmod 775 /var/tmp/wp-backup-work
+echo "[*] Generating Systemd configuration..."
+# Generate systemd files on the remote server to ensure paths are correct
+./configure.sh --systemd
 
 echo "[*] Installing MEGAcmd if not present..."
 if ! command -v mega-login &> /dev/null; then
-    echo "[*] Downloading MEGAcmd..."
+    echo "Installing MEGAcmd..."
     wget -q https://mega.nz/linux/repo/xUbuntu_22.04/amd64/megacmd-xUbuntu_22.04_amd64.deb -O /tmp/megacmd.deb
-    apt-get update -qq
-    apt-get install -y /tmp/megacmd.deb
+    sudo apt-get update -qq
+    sudo apt-get install -y /tmp/megacmd.deb
     rm -f /tmp/megacmd.deb
-    echo "[+] MEGAcmd installed"
-else
-    echo "[+] MEGAcmd already installed"
 fi
 
 echo "[*] Installing systemd services..."
-cp wordpress-backup.service /etc/systemd/system/
-cp wordpress-backup.timer /etc/systemd/system/
-cp wordpress-report.service /etc/systemd/system/
-cp wordpress-report.timer /etc/systemd/system/
+if [ -d "systemd" ]; then
+    sudo cp systemd/wordpress-backup.service /etc/systemd/system/
+    sudo cp systemd/wordpress-backup.timer /etc/systemd/system/
+    sudo cp systemd/wordpress-report.service /etc/systemd/system/
+    sudo cp systemd/wordpress-report.timer /etc/systemd/system/
 
-echo "[*] Reloading systemd..."
-systemctl daemon-reload
+    echo "[*] Reloading systemd..."
+    sudo systemctl daemon-reload
+    
+    echo "[*] Enabling timers..."
+    sudo systemctl enable wordpress-backup.timer
+    sudo systemctl enable wordpress-report.timer
+    
+    echo "[*] Starting timers..."
+    sudo systemctl start wordpress-backup.timer
+    sudo systemctl start wordpress-report.timer
+else
+    echo "WARNING: systemd directory not found after configuration!"
+fi
 
-echo "[*] Enabling timers..."
-systemctl enable wordpress-backup.timer
-systemctl enable wordpress-report.timer
+echo "[*] Ensuring Directories..."
+sudo mkdir -p "$INSTALL_DIR/backups"
+sudo mkdir -p /var/tmp/wp-backup-work
+sudo chown -R ubuntu:ubuntu /var/tmp/wp-backup-work
+sudo chmod 775 /var/tmp/wp-backup-work
 
-echo "[*] Starting timers..."
-systemctl start wordpress-backup.timer
-systemctl start wordpress-report.timer
-
-echo "[*] Cleaning up..."
-rm -f bundle.tar.zst remote_setup.sh
+echo "[*] Triggering D1 Sync (if configured)..."
+# Using the venv python to ensure requests is available
+./venv/bin/python3 lib/d1_manager.py || echo "[!] D1 Sync encountered an error (or not configured)."
 
 echo ""
-echo "=== Deployment Complete ==="
 echo "Timer Status:"
 systemctl status wordpress-backup.timer --no-pager || true
 echo ""
-echo "Next scheduled backup:"
-systemctl list-timers wordpress-backup.timer --no-pager || true
 REMOTE_SCRIPT
 
 chmod +x remote_setup.sh
 
 # 3. Ensure remote directory & Upload
 echo "Uploading bundle and setup script to $REMOTE_DIR..."
+# Ensure directory exists
 ssh -p $REMOTE_PORT -t $REMOTE_HOST "sudo mkdir -p $REMOTE_DIR && sudo chown ubuntu:ubuntu $REMOTE_DIR"
 scp -P $REMOTE_PORT bundle.tar.zst remote_setup.sh $REMOTE_HOST:$REMOTE_DIR/
 
@@ -124,12 +127,3 @@ echo ""
 echo "=========================================="
 echo "        Deployment Complete!"
 echo "=========================================="
-echo ""
-echo "Remote server: $REMOTE_HOST:$REMOTE_PORT"
-echo "Install path:  $REMOTE_DIR"
-echo ""
-echo "To check status:"
-echo "  ssh -p $REMOTE_PORT $REMOTE_HOST 'systemctl status wordpress-backup.timer'"
-echo ""
-echo "To run backup manually:"
-echo "  ssh -p $REMOTE_PORT $REMOTE_HOST 'cd $REMOTE_DIR && sudo ./run.sh'"
