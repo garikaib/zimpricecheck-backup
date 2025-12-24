@@ -8,10 +8,10 @@ Automated backup solution for WordPress sites including database, wp-config.php,
 - **MariaDB Support**: Uses `mysqldump` with `--add-drop-table` for clean restores
 - **Multi-Mega Storage**: Supports up to 3 Mega.nz accounts (each 19.5 GB usable)
 - **Smart Rotation**: Automatically deletes oldest archives across all accounts when full
+- **Organized Storage**: Archives are stored in `Year/Month` folders (e.g., `2024/12/`)
 - **Configurable Schedule**: Daily at midnight (Africa/Harare) by default, configurable
 - **Daily Reports**: Email summary with file sizes and storage account info
-- **Failure Alerts**: Immediate email notification on backup failures
-- **Compression**: Uses `zstd` for efficient compression
+- **Background Execution**: Runs in background by default with status tracking
 
 ## Storage Accounts
 
@@ -126,10 +126,20 @@ Backups run automatically based on the configured schedule:
 
 ### Manual Backup
 
+Run manually in the background (default, with email notification):
+
 ```bash
 cd /opt/wordpress-backup
 sudo ./run.sh
 ```
+
+Run in foreground (for debugging):
+
+```bash
+sudo ./run.sh -f
+```
+
+If a backup is already running, re-running the script will display the current progress status.
 
 ### Dry Run
 

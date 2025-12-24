@@ -71,7 +71,75 @@ RETENTION_MEGA_DAYS = int(os.getenv("RETENTION_MEGA_DAYS", 7))
 DB_FILE = os.getenv("DB_FILE", "backups.db")
 
 # Timezone
+# Timezone
 TIMEZONE = "Africa/Harare"
+
+# Status Tracking
+LOCK_FILE = "/var/tmp/wp-backup.pid"
+STATUS_FILE = "/var/tmp/wp-backup.status"
+
+
+class BackupTracker:
+    def __init__(self):
+        self.pid = os.getpid()
+    
+    def check_running(self):
+        """Check if another instance is running."""
+        if os.path.exists(LOCK_FILE):
+            try:
+                with open(LOCK_FILE, 'r') as f:
+                    old_pid = int(f.read().strip())
+                
+                # Check if process actually exists
+                if os.path.exists(f"/proc/{old_pid}"):
+                    # Read status
+                    status = "Unknown"
+                    pct = 0
+                    if os.path.exists(STATUS_FILE):
+                        try:
+                            with open(STATUS_FILE, 'r') as f:
+                                data = json.load(f)
+                                status = data.get("status", "Running")
+                                pct = data.get("percent", 0)
+                        except:
+                            pass
+                    return True, old_pid, status, pct
+                else:
+                     # Stale lock
+                     log_job("INFO", "Found stale lock file, removing.")
+                     os.remove(LOCK_FILE)
+            except ValueError:
+                os.remove(LOCK_FILE)
+        return False, None, None, 0
+
+    def start(self):
+        """Create lock and init status."""
+        with open(LOCK_FILE, 'w') as f:
+            f.write(str(self.pid))
+        
+        self.update("Starting", 0)
+
+    def update(self, status, percent):
+        """Update status file."""
+        data = {
+            "pid": self.pid,
+            "status": status,
+            "percent": percent,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        try:
+            with open(STATUS_FILE, 'w') as f:
+                json.dump(data, f)
+        except Exception as e:
+            print(f"Failed to update status: {e}")
+
+    def finish(self):
+        """Cleanup."""
+        if os.path.exists(LOCK_FILE):
+            os.remove(LOCK_FILE)
+        if os.path.exists(STATUS_FILE):
+            os.remove(STATUS_FILE)
+
 
 
 def init_db():
@@ -322,6 +390,9 @@ def mega_cmd(args, timeout=300):
     
     # Try mega-cmd first, then individual commands like mega-login, mega-put, etc.
     if not shutil.which("mega-cmd"):
+        # For some commands like mega-mkdir, the tool might be named mega-mkdir directly
+        # or it might be passed as 'mega-exec mkdir' depending on version, 
+        # but usually it is mega-mkdir.
         cmd = ["mega-" + args[0]] + args[1:]
     
     try:
@@ -397,10 +468,24 @@ def mega_delete(filename):
     return result.returncode == 0
 
 
-def mega_list_files():
-    """List files in Mega root."""
+def mega_mkdir(path):
+    """Create directory in Mega (recursive -p)."""
+    # mega-mkdir -p PATH
     result = subprocess.run(
-        ["mega-ls", "-l"],
+        ["mega-mkdir", "-p", path],
+        capture_output=True, text=True, timeout=60
+    )
+    return result.returncode == 0 or "already exists" in result.stderr
+
+
+def mega_list_files(path=None):
+    """List files in Mega path."""
+    cmd = ["mega-ls", "-l"]
+    if path:
+        cmd.append(path)
+        
+    result = subprocess.run(
+        cmd,
         capture_output=True, text=True, timeout=60
     )
     if result.returncode != 0:
@@ -427,22 +512,112 @@ def check_megacmd_installed():
     return shutil.which("mega-login") is not None or shutil.which("mega-cmd") is not None
 
 
-def get_oldest_archive_across_accounts():
-    """Find the oldest archive across all Mega accounts from our database."""
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("""
-        SELECT id, filename, mega_account, file_size 
-        FROM mega_archives 
-        ORDER BY upload_timestamp ASC 
-        LIMIT 1
-    """)
-    row = c.fetchone()
-    conn.close()
+def scan_for_oldest_file(accounts):
+    """
+    Scan all Mega accounts to find the globally oldest backup file.
+    Returns dict with account info and filename, or None.
+    Uses hierarchical scanning (Years -> Months -> Files) to be efficient.
+    """
+    oldest_file = None
+    oldest_date = datetime.datetime.max
     
-    if row:
-        return {"id": row[0], "filename": row[1], "account": row[2], "size": row[3]}
-    return None
+    for account in accounts:
+        try:
+            log_job("INFO", f"Scanning {account['email']} for old files...")
+            if not mega_login(account['email'], account['password']):
+                continue
+            
+            # 1. List root to find Years (folders like 2024, 2025...)
+            # We also check for legacy files in root
+            root_items = mega_list_files() # list of dicts with name, size
+            mega_logout() # Logout after list, re-login as needed or keep session? 
+            # Keeping session for next commands is better but for safety/simplicity in this loop we can just login.
+            # Actually, let's keep logged in for the scan of this account.
+            mega_login(account['email'], account['password'])
+            
+            # Helper to parse backup filename
+            def parse_backup_date(name):
+                if name.startswith('wp-backup-') and '.tar.zst' in name:
+                    try:
+                        date_part = name.replace('wp-backup-', '').split('.')[0]
+                        if '-' in date_part:
+                             return datetime.datetime.strptime(date_part, "%Y%m%d-%H%M%S")
+                    except ValueError:
+                        pass
+                return None
+
+            # Check root files (legacy)
+            for item in root_items:
+                f_date = parse_backup_date(item['name'])
+                if f_date and f_date < oldest_date:
+                    oldest_date = f_date
+                    oldest_file = {
+                        "filename": item['name'], # Root file
+                        "account": account['email'],
+                        "password": account['password'],
+                        "size": item['size']
+                    }
+
+            # Check Year directories
+            years = []
+            for item in root_items:
+                # Heuristic: 4 digits, likely a year directory? 
+                # mega-ls -l output doesn't explicitly give type easily in our parser?
+                # The generic parser might not differentiate file/dir well if size is 0 or -
+                # But typically years are 2023, 2024, 2025.
+                if re.match(r'^\d{4}$', item['name']):
+                    years.append(item['name'])
+            
+            years.sort()
+            
+            # Scan inside years (start with oldest year to find oldest file)
+            for year in years:
+                months = []
+                m_items = mega_list_files(f"{year}")
+                for m_item in m_items:
+                    if re.match(r'^\d{2}$', m_item['name']):
+                        months.append(m_item['name'])
+                
+                months.sort()
+                
+                for month in months:
+                    # List files in Year/Month
+                    f_items = mega_list_files(f"{year}/{month}")
+                    for f_item in f_items:
+                        f_date = parse_backup_date(f_item['name'])
+                        if f_date:
+                            if f_date < oldest_date:
+                                oldest_date = f_date
+                                oldest_file = {
+                                    "filename": f"{year}/{month}/{f_item['name']}",
+                                    "account": account['email'],
+                                    "password": account['password'],
+                                    "size": f_item['size']
+                                }
+                            # If we found a file in the oldest month of the oldest year, 
+                            # it's likely (one of) the oldest. 
+                            # But we should continue to check others if we want strict total ordering?
+                            # For space clearing, finding *a* very old file is usually enough.
+                            # But to be safe, let's let the loop run. 
+                            # It might be slow if there are many years. 
+                            # Optimization: if we found a file in year Y, we don't need to check year Y+1.
+                    
+                    if oldest_file and oldest_file['filename'].startswith(f"{year}/{month}"):
+                        # Found something in this month, no need to check newer months
+                        break
+                
+                if oldest_file and oldest_file['filename'].startswith(f"{year}"):
+                    # Found something in this year, no need to check newer years
+                    break
+
+            mega_logout()
+                        
+        except Exception as e:
+            log_job("WARNING", f"Failed to scan account {account['email']}: {e}")
+            mega_logout()
+            continue
+            
+    return oldest_file
 
 
 def remove_archive_record(archive_id):
@@ -482,21 +657,44 @@ def upload_to_mega(filepath, filename, file_size):
             
             if available >= file_size:
                 # Enough space, upload here
-                log_job("INFO", f"Uploading to {account['email']}...")
-                success, error = mega_upload(filepath)
+                
+                # Determine Year/Month from filename
+                # filename format: wp-backup-YYYYMMDD-HHMMSS.tar.zst
+                remote_dir = "/"
+                try:
+                    date_part = filename.replace("wp-backup-", "").split("-")[0]
+                    year = date_part[:4]
+                    month = date_part[4:6]
+                    remote_dir = f"{year}/{month}"
+                except:
+                    log_job("WARNING", "Could not parse date from filename, using root")
+                
+                log_job("INFO", f"Uploading to {account['email']} path {remote_dir}...")
+                
+                # Ensure directory exists
+                mega_mkdir(remote_dir)
+                
+                success, error = mega_upload(filepath, remote_dir)
                 
                 if success:
-                    # Record in database
+                    # Record in database 
+                    # Note: We store the full relative path in filename? 
+                    # Or just filename and rely on logic?
+                    # The DB is less critical now with smart scan, but let's store filename
+                    # Maybe store remote_path if we want, but legacy only has filename.
+                    # Let's store "YYYY/MM/filename" as filename to be explicit.
+                    full_remote_name = f"{remote_dir}/{filename}".strip("/")
+                    
                     conn = sqlite3.connect(DB_FILE)
                     c = conn.cursor()
                     c.execute(
                         "INSERT INTO mega_archives (filename, mega_account, file_size) VALUES (?, ?, ?)",
-                        (filename, account['email'], file_size)
+                        (full_remote_name, account['email'], file_size)
                     )
                     conn.commit()
                     conn.close()
                     
-                    log_job("SUCCESS", f"Uploaded to Mega: {account['email']}")
+                    log_job("SUCCESS", f"Uploaded to Mega: {account['email']} ({full_remote_name})")
                     mega_logout()
                     return account['email']
                 else:
@@ -510,24 +708,37 @@ def upload_to_mega(filepath, filename, file_size):
             continue
     
     # All accounts full - delete oldest and retry
-    log_job("INFO", "All Mega accounts full. Deleting oldest archive...")
-    oldest = get_oldest_archive_across_accounts()
+    log_job("INFO", "All Mega accounts full. Scanning for oldest archive to delete...")
+    
+    oldest = scan_for_oldest_file(MEGA_ACCOUNTS)
     
     if oldest:
-        # Find the account and delete
-        for account in MEGA_ACCOUNTS:
-            if account['email'] == oldest['account']:
-                try:
-                    if mega_login(account['email'], account['password']):
-                        if mega_delete(oldest['filename']):
-                            log_job("INFO", f"Deleted old archive: {oldest['filename']}")
-                            remove_archive_record(oldest['id'])
-                            mega_logout()
-                            # Retry upload
-                            return upload_to_mega(filepath, filename, file_size)
-                        mega_logout()
-                except Exception as e:
-                    log_job("ERROR", f"Failed to cleanup oldest archive: {e}")
+        log_job("INFO", f"Found oldest file: {oldest['filename']} on {oldest['account']}")
+        try:
+            if mega_login(oldest['account'], oldest['password']):
+                if mega_delete(oldest['filename']):
+                    log_job("SUCCESS", f"Deleted old archive: {oldest['filename']}")
+                    
+                    # Try to remove from DB if it exists, but don't fail if not
+                    try:
+                        conn = sqlite3.connect(DB_FILE)
+                        c = conn.cursor()
+                        c.execute("DELETE FROM mega_archives WHERE filename = ?", (oldest['filename'],))
+                        conn.commit()
+                        conn.close()
+                    except:
+                        pass
+                        
+                    mega_logout()
+                    
+                    # Retry upload
+                    log_job("INFO", "Retrying upload...")
+                    return upload_to_mega(filepath, filename, file_size)
+                
+                mega_logout()
+        except Exception as e:
+            log_job("ERROR", f"Failed to cleanup oldest archive: {e}")
+            mega_logout()
     
     log_job("ERROR", "Could not upload to any Mega account")
     return None
@@ -711,6 +922,17 @@ def send_daily_summary():
 
 def run_backup():
     """Main backup process."""
+    
+    tracker = BackupTracker()
+    is_running, pid, status, pct = tracker.check_running()
+    
+    if is_running:
+        print(f"Another backup process is running (PID: {pid}).")
+        print(f"Status: {status} ({pct}%)")
+        sys.exit(0)
+    
+    tracker.start()
+    
     # Ensure backup directory exists
     if not os.path.exists(BACKUP_DIR):
         os.makedirs(BACKUP_DIR)
@@ -721,25 +943,32 @@ def run_backup():
     os.makedirs(work_dir, exist_ok=True)
     
     log_job("INFO", f"Working directory: {work_dir}")
+    tracker.update("Initializing", 5)
     
     filepath = None
     try:
         # 1. Backup database
+        tracker.update("Backing up Database", 10)
         create_database_backup(work_dir)
         
         # 2. Backup wp-config.php
+        tracker.update("Backing up Config", 25)
         create_wp_config_backup(work_dir)
         
         # 3. Backup wp-content
+        tracker.update("Archiving wp-content", 30)
         create_wp_content_backup(work_dir)
         
         # 4. Create final archive
+        tracker.update("Creating Final Archive", 60)
         filepath, filename, file_size = create_final_archive(work_dir, BACKUP_DIR)
         
         # 5. Upload to Mega
+        tracker.update("Uploading to Mega", 80)
         mega_account = upload_to_mega(filepath, filename, file_size)
         
         # 6. Cleanup
+        tracker.update("Cleaning up", 95)
         cleanup_mega_retention()
         cleanup_local()
         
@@ -747,15 +976,27 @@ def run_backup():
         if should_send_daily_email():
             send_daily_summary()
         
-        log_job("COMPLETE", f"Backup completed: {filename} ({human_readable_size(file_size)}) -> {mega_account or 'local only'}")
+        result_msg = f"Backup completed: {filename} ({human_readable_size(file_size)}) -> {mega_account or 'local only'}"
+        log_job("COMPLETE", result_msg)
+        
+        # Send explicit success email for this run
+        send_email("Backup Successful", result_msg)
+        
+        tracker.update("Complete", 100)
         
         return filepath, filename, file_size, mega_account
+        
+    except Exception as e:
+        log_job("ERROR", f"Backup failed: {e}")
+        send_email("Backup Failed", f"The backup process failed with error:\n\n{e}")
+        raise
         
     finally:
         # Always cleanup work directory
         if os.path.exists(work_dir):
             shutil.rmtree(work_dir)
             log_job("INFO", "Cleaned up work directory")
+        tracker.finish()
 
 
 def recover_orphaned_backups():
@@ -826,7 +1067,17 @@ def main():
     
     parser = argparse.ArgumentParser(description="WordPress Backup Manager")
     parser.add_argument("--dry-run", action="store_true", help="Simulate backup without making changes")
+    parser.add_argument("--check", action="store_true", help="Check status of running backup")
     args = parser.parse_args()
+    
+    if args.check:
+        tracker = BackupTracker()
+        is_running, pid, status, pct = tracker.check_running()
+        if is_running:
+            print(f"Backup is running (PID {pid}): {status} - {pct}% complete")
+        else:
+            print("No backup running.")
+        return
     
     init_db()
     log_job("START", "WordPress backup job started.")
