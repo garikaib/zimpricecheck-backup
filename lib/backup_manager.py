@@ -19,6 +19,7 @@ import shutil
 import re
 import json
 import time
+import signal
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv, dotenv_values
@@ -55,25 +56,56 @@ class BackupTracker:
     def __init__(self):
         self.pid = os.getpid()
     
-    def check_running(self):
-        """Check if another instance is running."""
+    def get_running_pid(self):
+        """Return PID of running instance if exists."""
         if os.path.exists(LOCK_FILE):
             try:
                 with open(LOCK_FILE, 'r') as f:
                     old_pid = int(f.read().strip())
                 if os.path.exists(f"/proc/{old_pid}"):
-                    return True
+                    return old_pid
             except ValueError:
                 os.remove(LOCK_FILE)
-        return False
+        return None
+
+    def kill_process(self, pid):
+        """Kill a process and wait for it to exit."""
+        try:
+            os.kill(pid, signal.SIGTERM)
+            # Wait a bit for it to cleanup
+            for _ in range(50):
+                if not os.path.exists(f"/proc/{pid}"):
+                    return True
+                time.sleep(0.1)
+            # Force kill if stuck
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        return True
 
     def start(self):
         with open(LOCK_FILE, 'w') as f:
             f.write(str(self.pid))
+        # Register cleanup on sigterm
+        signal.signal(signal.SIGTERM, self._on_sigterm)
     
     def finish(self):
         if os.path.exists(LOCK_FILE):
             os.remove(LOCK_FILE)
+        if os.path.exists(STATUS_FILE):
+            os.remove(STATUS_FILE)
+
+    def _on_sigterm(self, signum, frame):
+        """Cleanup on termination signal."""
+        print("\n[!] Received stop signal. Cleaning up...")
+        if os.path.exists(WP_TEMP_DIR):
+            shutil.rmtree(WP_TEMP_DIR, ignore_errors=True)
+        self.finish()
+        sys.exit(0)
+    
+    def update_status(self, text):
+        with open(STATUS_FILE, 'w') as f:
+            f.write(text)
 
 # --- Database & Logging ---
 
@@ -109,8 +141,11 @@ def init_db():
     conn.commit()
     conn.close()
 
-def log_job(status, details, site_name="system"):
-    print(f"[{SERVER_ID}:{site_name}] [{status}] {details}")
+def log_job(status, details, site_name="system", progress_prefix=""):
+    """Log to stdout and DB. Prefix format: [1/5]"""
+    full_msg = f"{progress_prefix} [{status}] {details}" if progress_prefix else f"[{status}] {details}"
+    print(f"[{SERVER_ID}:{site_name}] {full_msg}")
+    
     try:
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
@@ -149,9 +184,13 @@ def get_sites() -> list:
 
 # --- Backup Logic ---
 
-def backup_site(site):
+def backup_site(site, index, total, tracker):
     site_name = site['name']
-    log_job("START", f"Starting backup for {site_name}", site_name)
+    prefix = f"[{index}/{total}]"
+    
+    msg = f"Starting backup for {site_name}"
+    log_job("START", msg, site_name, prefix)
+    tracker.update_status(f"{msg}")
     
     work_dir = os.path.join(WP_TEMP_DIR, site_name)
     if os.path.exists(work_dir): shutil.rmtree(work_dir)
@@ -177,7 +216,7 @@ def backup_site(site):
                "--single-transaction", "--add-drop-table", db_name]
         with open(db_file, 'w') as f:
             subprocess.run(cmd, stdout=f, check=True)
-        log_job("INFO", "Database backed up", site_name)
+        log_job("INFO", "Database backed up", site_name, prefix)
         
         # 2. WP Config
         shutil.copy2(site['wp_config_path'], os.path.join(work_dir, "wp-config.php"))
@@ -186,7 +225,7 @@ def backup_site(site):
         content_tar = os.path.join(work_dir, "wp-content.tar")
         cmd = ["tar", "--exclude=cache", "-cf", content_tar, "-C", os.path.dirname(site['wp_content_path']), "wp-content"]
         subprocess.run(cmd, check=True, stderr=subprocess.DEVNULL)
-        log_job("INFO", "wp-content archived", site_name)
+        log_job("INFO", "wp-content archived", site_name, prefix)
         
         # 4. Final Archive
         timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -197,21 +236,57 @@ def backup_site(site):
         # Compress
         subprocess.run(f"tar -cf - -C {work_dir} . | zstd -T0 -19 > {final_path}", shell=True, check=True)
         size = os.path.getsize(final_path)
-        log_job("SUCCESS", f"Archive created: {final_filename} ({human_readable_size(size)})", site_name)
+        log_job("SUCCESS", f"Archive created: {final_filename} ({human_readable_size(size)})", site_name, prefix)
         
         # 5. Upload to S3
-        upload_to_s3(final_path, final_filename, size, site_name, log_job)
+        def s3_logger(status, details, site_name=site_name):
+            log_job(status, details, site_name, prefix)
+            
+        upload_to_s3(final_path, final_filename, size, site_name, s3_logger)
         
     except Exception as e:
-        log_job("ERROR", f"Backup failed: {e}", site_name)
+        log_job("ERROR", f"Backup failed: {e}", site_name, prefix)
     finally:
         shutil.rmtree(work_dir)
 
 def main():
     tracker = BackupTracker()
-    if tracker.check_running():
-        print("Backup already running.")
-        sys.exit(1)
+    running_pid = tracker.get_running_pid()
+    
+    if running_pid:
+        # Check if running interactively
+        if sys.stdin.isatty():
+            # Read status
+            status_text = "Unknown"
+            if os.path.exists(STATUS_FILE):
+                with open(STATUS_FILE, 'r') as f:
+                    status_text = f.read().strip()
+            
+            print(f"\n⚠️ WARNING: Another backup (PID {running_pid}) is currently running.")
+            print(f"   Current Activity: {status_text}")
+            print("\nDo you want to:")
+            print("  [s]top & restart (Cancel logic, clean up, and start fresh with new config)")
+            print("  [c]ontinue       (Let current backup finish)")
+            
+            choice = input("\nChoice [s/C]: ").strip().lower()
+            
+            if choice == 's':
+                print("[*] Stopping old process...")
+                if tracker.kill_process(running_pid):
+                    print("[+] Process stopped. Cleaning up temp files...")
+                    if os.path.exists(WP_TEMP_DIR):
+                        shutil.rmtree(WP_TEMP_DIR, ignore_errors=True)
+                    print("[*] Starting new backup job...")
+                else:
+                    print("[!] Failed to stop process. Aborting.")
+                    sys.exit(1)
+            else:
+                print("[*] Continuing existing backup.")
+                sys.exit(0)
+        else:
+            # Not interactive (cron) - just exit
+            print(f"Backup already running (PID {running_pid}). Exiting.")
+            sys.exit(0)
     
     tracker.start()
     init_db()
@@ -228,8 +303,9 @@ def main():
         tracker.finish()
         return
 
-    for site in sites:
-        backup_site(site)
+    total_sites = len(sites)
+    for idx, site in enumerate(sites, 1):
+        backup_site(site, idx, total_sites, tracker)
     
     # Sync Logs
     if d1.enabled: d1.sync_all()
