@@ -1,0 +1,16 @@
+{
+  "sites": [],
+  "storage": [
+    {
+      "name": "idrive-primary",
+      "type": "s3",
+      "endpoint": "t5k4.ldn.idrivee2-61.com",
+      "region": "eu-west-3",
+      "access_key": "GsnM5fQAnVkgbEp0gmAP",
+      "secret_key": "jgQD2089I3c0amq2tbdnEa23tjs3IkhysrhcMTpp",
+      "bucket": "wordpress-backups",
+      "weight": 100,
+      "storage_limit_gb": 100
+    }
+  ]
+}

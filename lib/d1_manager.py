@@ -43,9 +43,56 @@ class D1Manager:
             "Content-Type": "application/json"
         }
         self.enabled = all([self.account_id, self.api_token, self.database_id])
+        
+        # Ensure local DB is initialized
+        self.init_local_db()
 
     def log(self, message):
         print(f"[D1] {message}")
+
+    def init_local_db(self):
+        """Initialize local SQLite tables if they don't exist."""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            c = conn.cursor()
+            
+            c.execute('''CREATE TABLE IF NOT EXISTS backup_log
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, 
+                          status TEXT, 
+                          details TEXT, 
+                          site_name TEXT, 
+                          server_id TEXT)''')
+            
+            c.execute('''CREATE TABLE IF NOT EXISTS s3_archives
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          filename TEXT NOT NULL,
+                          storage_name TEXT NOT NULL,
+                          s3_endpoint TEXT NOT NULL,
+                          s3_bucket TEXT NOT NULL,
+                          file_size INTEGER,
+                          upload_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                          site_name TEXT,
+                          server_id TEXT)''')
+            
+            c.execute('''CREATE TABLE IF NOT EXISTS daily_emails
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          date TEXT,
+                          email_sent INTEGER,
+                          backup_count INTEGER,
+                          server_id TEXT)''')
+            
+            # Migration: add server_id if missing (for legacy databases)
+            for table in ['backup_log', 's3_archives', 'daily_emails']:
+                try:
+                    c.execute(f"ALTER TABLE {table} ADD COLUMN server_id TEXT")
+                except sqlite3.OperationalError:
+                    pass
+            
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            self.log(f"Failed to initialize local DB: {e}")
 
     def execute_remote(self, sql, params=None):
         """Execute SQL query on D1."""
@@ -101,6 +148,7 @@ class D1Manager:
             """CREATE TABLE IF NOT EXISTS s3_archives
                (id INTEGER PRIMARY KEY,
                 filename TEXT,
+                storage_name TEXT,
                 s3_endpoint TEXT,
                 s3_bucket TEXT,
                 file_size INTEGER,
@@ -152,16 +200,19 @@ class D1Manager:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
-        # Ensure local table has server_id
+        # Ensure local table has server_id - Handled by init_local_db() but kept for safety
         try:
             c.execute(f"ALTER TABLE {table_name} ADD COLUMN server_id TEXT")
-            self.log(f"Added server_id column to local {table_name}")
         except sqlite3.OperationalError:
             pass
         
         # Select only this server's records
-        c.execute(f"SELECT * FROM {table_name} WHERE server_id = ? OR server_id IS NULL", [self.server_id])
-        local_rows = c.fetchall()
+        try:
+            c.execute(f"SELECT * FROM {table_name} WHERE server_id = ? OR server_id IS NULL", [self.server_id])
+            local_rows = c.fetchall()
+        except sqlite3.OperationalError:
+            self.log(f"Local table {table_name} not ready, skipping pull.")
+            return
         
         local_ids = set()
         rows_to_push = []

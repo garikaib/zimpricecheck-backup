@@ -49,6 +49,10 @@ if ! command -v zstd &> /dev/null; then
 fi
 
 # Create tarball (exclude venv, git, pycache, backups, db)
+if [ -f "config.json" ]; then
+    echo "[*] Including local config.json..."
+fi
+
 tar --exclude='./venv' \
     --exclude='./.git' \
     --exclude='./__pycache__' \
