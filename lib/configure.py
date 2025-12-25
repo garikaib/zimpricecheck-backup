@@ -349,13 +349,30 @@ def run_remote_wizard():
     print("\n[*] Scanning for WordPress sites...")
     detected = detect_wordpress_sites()
     
+    sites = load_sites()  # Load any existing sites
+    
     if detected:
         selected = prompt_select_sites(detected)
         if selected:
-            save_sites(selected)
+            # Merge with existing, avoid duplicates by name
+            existing_names = {s['name'] for s in sites}
+            for s in selected:
+                if s['name'] not in existing_names:
+                    sites.append(s)
+            save_sites(sites)
     else:
         print("[!] No WordPress sites detected automatically.")
-        print("    You can add sites manually later with ./configure.sh --sites")
+    
+    # Offer to add sites manually
+    while True:
+        add_more = input("\nAdd a site manually? [y/N]: ").strip().lower()
+        if add_more != 'y':
+            break
+        
+        new_site = manual_add_site()
+        if new_site:
+            sites.append(new_site)
+            save_sites(sites)
     
     # Validate
     if not run_validation():
@@ -370,6 +387,72 @@ def run_remote_wizard():
     print("      sudo cp systemd/* /etc/systemd/system/")
     print("      sudo systemctl daemon-reload")
     print("      sudo systemctl enable --now wordpress-backup.timer")
+
+
+def manual_add_site():
+    """Manually add a WordPress site with validation."""
+    print("\n--- Add WordPress Site Manually ---")
+    
+    # Get site name
+    name = input("Site name (unique identifier): ").strip()
+    if not name:
+        print("  [!] Site name is required.")
+        return None
+    
+    # Clean up name
+    name = name.lower().replace(" ", "-").replace(".", "-")
+    
+    # Get wp-config path
+    wp_config_path = input("Path to wp-config.php: ").strip()
+    if not wp_config_path:
+        print("  [!] wp-config.php path is required.")
+        return None
+    
+    # Validate wp-config.php exists
+    if not os.path.isfile(wp_config_path):
+        print(f"  [!] File not found: {wp_config_path}")
+        return None
+    
+    # Validate it's a real wp-config
+    try:
+        with open(wp_config_path, 'r') as f:
+            content = f.read(1000)
+            if 'DB_NAME' not in content:
+                print("  [!] File does not appear to be a valid wp-config.php (no DB_NAME found)")
+                return None
+    except Exception as e:
+        print(f"  [!] Cannot read file: {e}")
+        return None
+    
+    # Get wp-content path
+    wp_content_path = input("Path to wp-content directory: ").strip()
+    if not wp_content_path:
+        print("  [!] wp-content path is required.")
+        return None
+    
+    # Validate wp-content exists
+    if not os.path.isdir(wp_content_path):
+        print(f"  [!] Directory not found: {wp_content_path}")
+        return None
+    
+    # Check for themes or plugins subdirectory as validation
+    has_themes = os.path.isdir(os.path.join(wp_content_path, "themes"))
+    has_plugins = os.path.isdir(os.path.join(wp_content_path, "plugins"))
+    if not has_themes and not has_plugins:
+        print("  [!] Directory does not appear to be a valid wp-content (no themes/ or plugins/ found)")
+        return None
+    
+    print(f"  [+] Site '{name}' validated successfully!")
+    
+    return {
+        "name": name,
+        "wp_config_path": wp_config_path,
+        "wp_content_path": wp_content_path,
+        "db_host": "",
+        "db_name": "",
+        "db_user": "",
+        "db_password": ""
+    }
 
 
 def main():
