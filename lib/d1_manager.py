@@ -73,24 +73,26 @@ class D1Manager:
         return sqlite3.connect(self.db_file)
 
     def verify_remote_tables(self):
-        """Ensure remote tables exist."""
+        """Ensure remote tables exist and have correct schema."""
         if not self.enabled:
             return
 
-        # Schema must match local exactly for sync to work easily
+        # 1. Create tables if they don't exist
         schemas = [
             """CREATE TABLE IF NOT EXISTS backup_log
                (id INTEGER PRIMARY KEY, 
                 timestamp DATETIME, 
                 status TEXT, 
-                details TEXT);""",
+                details TEXT,
+                site_name TEXT);""",
             
             """CREATE TABLE IF NOT EXISTS mega_archives
                (id INTEGER PRIMARY KEY,
                 filename TEXT,
                 mega_account TEXT,
                 file_size INTEGER,
-                upload_timestamp DATETIME);""",
+                upload_timestamp DATETIME,
+                site_name TEXT);""",
             
             """CREATE TABLE IF NOT EXISTS daily_emails
                (id INTEGER PRIMARY KEY,
@@ -101,6 +103,21 @@ class D1Manager:
         
         for sql in schemas:
             self.execute_remote(sql)
+            
+        # 2. Migration: Add site_name column if missing (for existing tables)
+        # We try to add it and ignore failure if it exists
+        migration_sqls = [
+            "ALTER TABLE backup_log ADD COLUMN site_name TEXT;",
+            "ALTER TABLE mega_archives ADD COLUMN site_name TEXT;"
+        ]
+        
+        for sql in migration_sqls:
+            # We don't want to fail if column exists, but D1 API will return error.
+            # We just log it as debug and proceed.
+            try:
+                self.execute_remote(sql)
+            except:
+                pass
 
     def sync_table(self, table_name, pk_field="id"):
         """Sync a specific table between local and remote using batched operations."""
@@ -120,6 +137,15 @@ class D1Manager:
         conn = self.get_local_connection()
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
+        
+        # Ensure local table has site_name (migration for local DB)
+        if table_name in ["backup_log", "mega_archives"]:
+            try:
+                c.execute(f"ALTER TABLE {table_name} ADD COLUMN site_name TEXT")
+                self.log(f"Added site_name column to local {table_name}")
+            except sqlite3.OperationalError:
+                pass # Already exists
+        
         c.execute(f"SELECT * FROM {table_name}")
         local_rows = c.fetchall()
         
@@ -135,26 +161,20 @@ class D1Manager:
         
         # 3. Batch Push Missing to Remote
         if rows_to_push:
-            # Calculate batch size ensuring params < 100
-            # num_params = rows * cols
             if len(rows_to_push) > 0:
                 cols_count = len(rows_to_push[0].keys())
-                # Use a safe margin, say 90 params max
                 batch_size = math.floor(90 / cols_count)
-                if batch_size < 1: batch_size = 1 # Should not happen if cols < 90
+                if batch_size < 1: batch_size = 1
 
                 self.log(f"Pushing {len(rows_to_push)} records to remote in batches of {batch_size}...")
                 
                 for batch in chunk_list(rows_to_push, batch_size):
-                    # Construct bulk insert
-                    # INSERT INTO table (col1, col2) VALUES (?, ?), (?, ?)
                     fields = batch[0].keys()
                     placeholders = "(" + ", ".join(["?"] * len(fields)) + ")"
                     all_placeholders = ", ".join([placeholders] * len(batch))
                     
                     sql = f"INSERT INTO {table_name} ({', '.join(fields)}) VALUES {all_placeholders}"
                     
-                    # Flatten values
                     params = []
                     for row in batch:
                         params.extend([row[f] for f in fields])
@@ -165,7 +185,6 @@ class D1Manager:
         missing_local = list(remote_ids - local_ids)
         
         if missing_local:
-            # Batch size for SELECT IN (?) is simple: max 90 params
             pull_batch_size = 90
             self.log(f"Pulling {len(missing_local)} records from remote in batches of {pull_batch_size}...")
             
@@ -173,8 +192,6 @@ class D1Manager:
                 placeholders = ", ".join(["?"] * len(batch_ids))
                 sql = f"SELECT * FROM {table_name} WHERE {pk_field} IN ({placeholders})"
                 
-                # Careful: batch_ids is list of IDs. D1 params expect list.
-                # Assuming IDs are ints or strings, should be fine.
                 res = self.execute_remote(sql, list(batch_ids))
                 
                 if res and "results" in res:

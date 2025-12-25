@@ -1,31 +1,54 @@
 #!/bin/bash
-# Deployment Script
+# Deployment Script (SaaS Ready)
+# Reads deployment target from .env
 
-REMOTE_HOST="ubuntu@wp.zimpricecheck.com"
-REMOTE_PORT="2200"
-REMOTE_DIR="/opt/wordpress-backup"
+set -e
+
+# Load configuration from .env
+if [ -f ".env" ]; then
+    # Parse .env safely (handles quotes)
+    export $(grep -v '^#' .env | sed 's/"//g' | xargs)
+fi
+
+# Deployment Settings (with defaults)
+REMOTE_HOST="${REMOTE_HOST:-wp.zimpricecheck.com}"
+REMOTE_USER="${REMOTE_USER:-ubuntu}"
+REMOTE_PORT="${REMOTE_PORT:-22}"
+REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
+
+# Full SSH target
+SSH_TARGET="${REMOTE_USER}@${REMOTE_HOST}"
 
 # 0. Check Local Config
 if [ ! -f ".env" ]; then
-    echo "Configuration missing. Running setup wizard locally..."
+    echo "Configuration missing. Running setup wizard..."
     ./configure.sh
     if [ ! -f ".env" ]; then
         echo "Setup aborted."
         exit 1
     fi
+    # Reload after configuration
+    export $(grep -v '^#' .env | sed 's/"//g' | xargs)
+    REMOTE_HOST="${REMOTE_HOST:-wp.zimpricecheck.com}"
+    REMOTE_USER="${REMOTE_USER:-ubuntu}"
+    REMOTE_PORT="${REMOTE_PORT:-22}"
+    REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
+    SSH_TARGET="${REMOTE_USER}@${REMOTE_HOST}"
 fi
 
-echo "Deploying to $REMOTE_HOST:$REMOTE_PORT..."
+echo "============================================="
+echo "  Deploying to ${SSH_TARGET}:${REMOTE_PORT}"
+echo "  Remote Dir: ${REMOTE_DIR}"
+echo "============================================="
 
 # 1. Bundle Files with ZSTD
-echo "Creating compressed ZSTD bundle..."
+echo "[*] Creating compressed bundle..."
 if ! command -v zstd &> /dev/null; then
-    echo "Error: zstd is not installed locally. Please run: sudo apt install zstd"
+    echo "Error: zstd is not installed. Run: sudo apt install zstd"
     exit 1
 fi
 
-# Create tarball compressed with zstd
-# Explicitly include .env, lib, configure.sh, run.sh, requirements.txt
+# Create tarball (exclude venv, git, pycache, backups, db)
 tar --exclude='./venv' \
     --exclude='./.git' \
     --exclude='./__pycache__' \
@@ -40,7 +63,7 @@ cat > remote_setup.sh << 'REMOTE_SCRIPT'
 #!/bin/bash
 set -e
 
-INSTALL_DIR="/opt/wordpress-backup"
+INSTALL_DIR="$1"
 
 echo "[*] Extracting bundle..."
 cd "$INSTALL_DIR"
@@ -56,15 +79,13 @@ echo "[*] Installing Python dependencies..."
 ./venv/bin/pip install -r requirements.txt -q
 
 echo "[*] Setting permissions..."
-chmod +x run.sh configure.sh lib/*.py
+chmod +x run.sh configure.sh lib/*.py 2>/dev/null || true
 
 echo "[*] Generating Systemd configuration..."
-# Generate systemd files on the remote server to ensure paths are correct
 ./configure.sh --systemd
 
 echo "[*] Installing MEGAcmd if not present..."
 if ! command -v mega-login &> /dev/null; then
-    echo "Installing MEGAcmd..."
     wget -q https://mega.nz/linux/repo/xUbuntu_22.04/amd64/megacmd-xUbuntu_22.04_amd64.deb -O /tmp/megacmd.deb
     sudo apt-get update -qq
     sudo apt-get install -y /tmp/megacmd.deb
@@ -73,57 +94,41 @@ fi
 
 echo "[*] Installing systemd services..."
 if [ -d "systemd" ]; then
-    sudo cp systemd/wordpress-backup.service /etc/systemd/system/
-    sudo cp systemd/wordpress-backup.timer /etc/systemd/system/
-    sudo cp systemd/wordpress-report.service /etc/systemd/system/
-    sudo cp systemd/wordpress-report.timer /etc/systemd/system/
-
-    echo "[*] Reloading systemd..."
+    sudo cp systemd/*.service /etc/systemd/system/ 2>/dev/null || true
+    sudo cp systemd/*.timer /etc/systemd/system/ 2>/dev/null || true
     sudo systemctl daemon-reload
-    
-    echo "[*] Enabling timers..."
-    sudo systemctl enable wordpress-backup.timer
-    sudo systemctl enable wordpress-report.timer
-    
-    echo "[*] Starting timers..."
-    sudo systemctl start wordpress-backup.timer
-    sudo systemctl start wordpress-report.timer
-else
-    echo "WARNING: systemd directory not found after configuration!"
+    sudo systemctl enable wordpress-backup.timer wordpress-report.timer 2>/dev/null || true
+    sudo systemctl start wordpress-backup.timer wordpress-report.timer 2>/dev/null || true
 fi
 
-echo "[*] Ensuring Directories..."
+echo "[*] Ensuring directories..."
 sudo mkdir -p "$INSTALL_DIR/backups"
 sudo mkdir -p /var/tmp/wp-backup-work
-sudo chown -R ubuntu:ubuntu /var/tmp/wp-backup-work
-sudo chmod 775 /var/tmp/wp-backup-work
+sudo chown -R ubuntu:ubuntu /var/tmp/wp-backup-work "$INSTALL_DIR"
 
-echo "[*] Triggering D1 Sync (if configured)..."
-# Using the venv python to ensure requests is available
-./venv/bin/python3 lib/d1_manager.py || echo "[!] D1 Sync encountered an error (or not configured)."
+echo "[*] Triggering D1 Sync..."
+./venv/bin/python3 lib/d1_manager.py || echo "[!] D1 Sync skipped or failed."
 
 echo ""
 echo "Timer Status:"
 systemctl status wordpress-backup.timer --no-pager || true
-echo ""
 REMOTE_SCRIPT
 
 chmod +x remote_setup.sh
 
-# 3. Ensure remote directory & Upload
-echo "Uploading bundle and setup script to $REMOTE_DIR..."
-# Ensure directory exists
-ssh -p $REMOTE_PORT -t $REMOTE_HOST "sudo mkdir -p $REMOTE_DIR && sudo chown ubuntu:ubuntu $REMOTE_DIR"
-scp -P $REMOTE_PORT bundle.tar.zst remote_setup.sh $REMOTE_HOST:$REMOTE_DIR/
+# 3. Upload
+echo "[*] Uploading to ${SSH_TARGET}:${REMOTE_DIR}..."
+ssh -p ${REMOTE_PORT} -t ${SSH_TARGET} "sudo mkdir -p ${REMOTE_DIR} && sudo chown ${REMOTE_USER}:${REMOTE_USER} ${REMOTE_DIR}"
+scp -P ${REMOTE_PORT} bundle.tar.zst remote_setup.sh ${SSH_TARGET}:${REMOTE_DIR}/
 
 # 4. Remote Setup
-echo "Running remote setup..."
-ssh -p $REMOTE_PORT -t $REMOTE_HOST "cd $REMOTE_DIR && sudo bash remote_setup.sh"
+echo "[*] Running remote setup..."
+ssh -p ${REMOTE_PORT} -t ${SSH_TARGET} "cd ${REMOTE_DIR} && sudo bash remote_setup.sh ${REMOTE_DIR}"
 
-# Cleanup local
+# Cleanup
 rm -f bundle.tar.zst remote_setup.sh
 
 echo ""
-echo "=========================================="
+echo "============================================="
 echo "        Deployment Complete!"
-echo "=========================================="
+echo "============================================="
