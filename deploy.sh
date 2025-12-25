@@ -46,6 +46,7 @@ deploy_node() {
     
     # Bundle Agent Files
     tar --exclude='./venv' \
+        --exclude='venv' \
         --exclude='./.git' \
         --exclude='./master' \
         --exclude='./__pycache__' \
@@ -103,13 +104,17 @@ deploy_master() {
     echo "[*] Creating MASTER bundle..."
     
     # Bundle Master Files
-    tar --exclude='./venv' \
+    # Note: We exclude 'master/venv' explicitly
+    tar --exclude='master/venv' \
+        --exclude='master/.env' \
+        --exclude='venv' \
         --exclude='./.git' \
         --exclude='./lib' \
         --exclude='./docs' \
         --exclude='./backups' \
         --exclude='*.tar.zst' \
         --exclude='*.pyc' \
+        --exclude='__pycache__' \
         --exclude='master.db' \
         -c master .env | zstd - > bundle.tar.zst
 
