@@ -5,10 +5,10 @@
 set -e
 
 MODE="${1:-node}"
-TEST_FLAG="$2"
+ARG2="$2"
 
 if [[ "$MODE" != "node" && "$MODE" != "master" ]]; then
-    echo "Usage: ./deploy.sh [node|master] [--test]"
+    echo "Usage: ./deploy.sh [node|master] [--test|--web]"
     exit 1
 fi
 
@@ -119,6 +119,7 @@ deploy_master() {
 set -e
 INSTALL_DIR="$1"
 REMOTE_USER="$2"
+FLAG="$3"
 
 echo "[*] Extracting MASTER bundle..."
 cd "$INSTALL_DIR"
@@ -161,6 +162,13 @@ sudo systemctl enable --now wordpress-master.service
 echo "[*] Fixing permissions..."
 sudo chown -R "$REMOTE_USER":"$REMOTE_USER" "$INSTALL_DIR"
 
+    # Web Setup (Optional)
+    if [ "$FLAG" == "--web" ]; then
+        echo "[*] Initializing Web Layer (Nginx + SSL)..."
+        chmod +x master/setup_web.sh
+        sudo ./master/setup_web.sh
+    fi
+
 echo "[+] Master Server deployed and running on port 8000!"
 REMOTE_SCRIPT
 }
@@ -180,7 +188,7 @@ ssh -p ${REMOTE_PORT} -t ${SSH_TARGET} "sudo mkdir -p ${REMOTE_DIR} && sudo chow
 scp -P ${REMOTE_PORT} bundle.tar.zst remote_setup.sh ${SSH_TARGET}:${REMOTE_DIR}/
 
 echo "[*] Executing remote setup..."
-ssh -p ${REMOTE_PORT} -t ${SSH_TARGET} "cd ${REMOTE_DIR} && sudo bash remote_setup.sh ${REMOTE_DIR} ${REMOTE_USER}"
+ssh -p ${REMOTE_PORT} -t ${SSH_TARGET} "cd ${REMOTE_DIR} && sudo bash remote_setup.sh ${REMOTE_DIR} ${REMOTE_USER} ${ARG2}"
 
 # Cleanup
 rm -f bundle.tar.zst remote_setup.sh
