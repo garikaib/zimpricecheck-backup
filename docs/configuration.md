@@ -1,112 +1,96 @@
 # Configuration Reference
 
-The `configure.sh` script provides an interactive wizard for managing all configuration. It supports both menu-driven and flag-based operation.
+The `configure.sh` script provides an intelligent wizard that adapts to your environment.
 
-## Usage
+## Environment Detection
 
-```bash
-./configure.sh [OPTIONS]
+The wizard automatically detects whether you're on a **local workstation** or a **remote server**:
+
+- **Local**: Has no `/var/www/` directory with websites
+- **Remote**: Has `/var/www/` with WordPress installations
+
+## Local Workflow
+
+When run locally (development machine):
+
 ```
+./configure.sh
+```
+
+### Flow:
+1. **Deployment Target** (Required on first run)
+   - REMOTE_HOST, REMOTE_USER, REMOTE_PORT, REMOTE_DIR
+
+2. **Optional Sections** (Y/N/S for each):
+   - Mega.nz Storage
+   - SMTP Email
+   - Cloudflare D1
+   - Backup Settings
+   
+   > **S = Skip**: Immediately triggers deployment
+
+3. **Deploy?** (Y/N)
+
+## Remote Workflow
+
+When run on a server (after deployment):
+
+```
+./configure.sh
+```
+
+### Flow:
+1. **Auto-Detect WordPress Sites**
+   - Scans `/var/www/` for installations
+   - Displays found sites
+   - Asks which to back up (Y/N for each)
+
+2. **Validation**:
+   | Check | Level | Result |
+   |-------|-------|--------|
+   | Sites ≥ 1 | CRITICAL | Exit if none |
+   | Mega configured | WARNING | "Local backups only" |
+   | SMTP configured | WARNING | "No email alerts" |
+   | D1 configured | INFO | "Local logs only" |
+
+3. **Generate Systemd Files**
 
 ## Command Line Options
 
 | Flag | Description |
 |------|-------------|
-| `--sites` | Jump directly to site management menu |
-| `--deploy` | Configure deployment settings only |
-| `--env` | Configure global credentials (Mega, SMTP, D1) |
-| `--systemd` | Generate systemd service files (typically run on remote) |
-| (no flags) | Launch interactive menu |
+| `--detect` | Auto-detect and select WordPress sites |
+| `--validate` | Run validation checks only |
+| `--systemd` | Generate systemd files only |
+| `--sites` | Manual site management |
 
-## Interactive Menu
+## Detection Paths
 
-When run without flags, the wizard presents:
+WordPress sites are searched in:
+- `/var/www/*/wp-config.php`
+- `/var/www/*/htdocs/wp-config.php`
+- `/var/www/*/public_html/wp-config.php`
+- `/home/*/public_html/wp-config.php`
+
+## Shared Storage (SERVER_ID)
+
+When multiple servers share the same Mega account:
 
 ```
-==================================================
-   Backup Configuration Wizard (SaaS Ready)
-==================================================
- 1. Manage WordPress Sites
- 2. Configure Global Credentials (Mega, Email, D1)
- 3. Configure Deployment Settings (SSH)
- 4. Configure Backup Schedule & Retention
- 5. Generate Systemd Files
- 0. Exit
+SERVER_ID="server1"
 ```
 
----
+Archives are stored at: `/{SERVER_ID}/{Year}/{Month}/`
+
+This prevents filename conflicts and allows proper retention per-server.
+
+SERVER_ID is auto-generated from hostname on first remote run.
 
 ## Configuration Files
 
-### `.env` — Global Settings
+| File | Location | Purpose |
+|------|----------|---------|
+| `.env` | Project root | Global settings |
+| `sites.json` | Project root | WordPress sites |
 
-Contains credentials and settings shared across all sites:
-
-```env
-# Mega.nz Accounts
-MEGA_EMAIL_1="your@email.com"
-MEGA_PASSWORD_1="password"
-MEGA_STORAGE_LIMIT_GB="19.5"
-
-# SMTP Email
-SMTP_SERVER="smtp.example.com"
-SMTP_PORT="587"
-SMTP_USER="notifications@example.com"
-SMTP_PASSWORD="password"
-SMTP_SENDER_EMAIL="backup@example.com"
-
-# Backup Settings
-BACKUP_DIR="/opt/wordpress-backup/backups"
-BACKUP_FREQUENCY="daily"
-BACKUP_TIME="00:00"
-RETENTION_LOCAL_DAYS="2"
-RETENTION_MEGA_DAYS="7"
-
-# Cloudflare D1 (Optional)
-CLOUDFLARE_ACCOUNT_ID=""
-CLOUDFLARE_API_TOKEN=""
-CLOUDFLARE_D1_DATABASE_ID=""
-
-# Deployment Target
-REMOTE_HOST="your-server.com"
-REMOTE_USER="ubuntu"
-REMOTE_PORT="22"
-REMOTE_DIR="/opt/wordpress-backup"
-```
-
-### `sites.json` — Site Definitions
-
-See [Managing Sites](sites.md) for details.
-
----
-
-## Backup Frequency Options
-
-| Value | Schedule |
-|-------|----------|
-| `daily` | Once per day at specified time |
-| `twice` | Twice per day (midnight and noon) |
-| `every-6h` | Every 6 hours |
-| `every-2h` | Every 2 hours |
-
----
-
-## Systemd Generation
-
-The `--systemd` flag generates service files in `./systemd/`:
-
-- `wordpress-backup.service` — Backup execution unit
-- `wordpress-backup.timer` — Scheduled trigger
-- `wordpress-report.service` — Daily email report
-- `wordpress-report.timer` — Report schedule (8 AM)
-
-**Important**: Run `--systemd` on the **remote server** after deployment to ensure paths are correct.
-
-```bash
-# On remote server
-cd /opt/wordpress-backup
-./configure.sh --systemd
-sudo cp systemd/* /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now wordpress-backup.timer
-```
+Both files are in `.gitignore` and should never be committed.

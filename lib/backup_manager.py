@@ -53,6 +53,9 @@ for i in range(1, 4):
 
 MEGA_STORAGE_LIMIT_BYTES = int(float(os.getenv("MEGA_STORAGE_LIMIT_GB", "19.5")) * 1024 * 1024 * 1024)
 
+# Server ID for shared storage (avoids conflicts between servers)
+SERVER_ID = os.getenv("SERVER_ID", "default")
+
 # Status Tracking
 LOCK_FILE = "/var/tmp/wp-backup.pid"
 STATUS_FILE = "/var/tmp/wp-backup.status"
@@ -186,10 +189,10 @@ def upload_to_mega(filepath, filename, file_size, site_name):
                 mega_logout()
                 continue
             
-            # Determine dir: Year/Month
+            # Determine dir: SERVER_ID/Year/Month (for shared storage)
             date_part = datetime.datetime.now().strftime("%Y%m%d")
             year, month = date_part[:4], date_part[4:6]
-            remote_dir = f"{year}/{month}"
+            remote_dir = f"{SERVER_ID}/{year}/{month}"
             
             subprocess.run(["mega-mkdir", "-p", remote_dir], capture_output=True)
             

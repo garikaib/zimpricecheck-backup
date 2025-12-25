@@ -81,8 +81,9 @@ echo "[*] Installing Python dependencies..."
 echo "[*] Setting permissions..."
 chmod +x run.sh configure.sh lib/*.py 2>/dev/null || true
 
-echo "[*] Generating Systemd configuration..."
-./configure.sh --systemd
+echo "[*] Running remote configuration wizard..."
+# This will auto-detect WordPress sites and generate systemd files
+./venv/bin/python3 lib/configure.py
 
 echo "[*] Installing MEGAcmd if not present..."
 if ! command -v mega-login &> /dev/null; then
