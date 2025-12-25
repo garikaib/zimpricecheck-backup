@@ -1,8 +1,15 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from master.core.config import get_settings
 from master.api.v1.endpoints import auth, nodes, stats
 from fastapi import APIRouter
+
+# Configure logging to show our debug messages
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 settings = get_settings()
 

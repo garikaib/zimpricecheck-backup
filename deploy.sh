@@ -125,6 +125,10 @@ echo "[*] Extracting MASTER bundle..."
 cd "$INSTALL_DIR"
 zstd -d -c bundle.tar.zst | tar -xf -
 
+echo "[*] Clearing Python cache..."
+find . -name '*.pyc' -delete 2>/dev/null || true
+find . -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+
 echo "[*] Setting up Master venv..."
 if [ ! -d "venv" ]; then python3 -m venv venv; fi
 ./venv/bin/pip install --upgrade pip -q
