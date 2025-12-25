@@ -12,12 +12,15 @@ The API uses **OAuth2 Password Bearer** flow for Admins and **API Keys** for Nod
 
 ### 1. Admin Login (JWT)
 **Endpoint**: `POST /auth/login`
-**Content-Type**: `application/x-www-form-urlencoded`
+**Content-Type**: `application/json`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `username` | string | Admin Email (e.g., `admin@example.com`) |
-| `password` | string | Admin Password |
+**Body:**
+```json
+{
+  "username": "admin@example.com",
+  "password": "yourpassword"
+}
+```
 
 **Response (200 OK):**
 ```json

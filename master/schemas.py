@@ -17,6 +17,11 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
+# -- Auth Schemas --
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 # -- Token Schema --
 class Token(BaseModel):
     access_token: str

@@ -10,7 +10,14 @@ The Master Server provides the REST API for the Backup Platform.
 
 ### Authentication
 *   `POST /api/v1/auth/login`
-    *   **Body**: `username` (email), `password`
+    *   **Content-Type**: `application/json`
+    *   **Body**: 
+        ```json
+        {
+          "username": "admin@example.com",
+          "password": "yourpassword"
+        }
+        ```
     *   **Return**: Access Token (JWT)
 
 ### Node Management (Public/Agent)
