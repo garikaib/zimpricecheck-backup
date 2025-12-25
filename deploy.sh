@@ -68,6 +68,7 @@ cat > remote_setup.sh << 'REMOTE_SCRIPT'
 set -e
 
 INSTALL_DIR="$1"
+REMOTE_USER="$2"
 
 echo "[*] Extracting bundle..."
 cd "$INSTALL_DIR"
@@ -106,14 +107,16 @@ echo "[*] Ensuring directories and permissions..."
 sudo mkdir -p "$INSTALL_DIR/backups"
 sudo mkdir -p /var/tmp/wp-backup-work
 
-# Fix ownership for ubuntu user (backups run as ubuntu, not root)
-sudo chown -R ubuntu:ubuntu /var/tmp/wp-backup-work "$INSTALL_DIR"
-
 # Clean up any stale lock files (may have wrong permissions from prior runs)
 sudo rm -f /var/tmp/wp-backup.pid /var/tmp/wp-backup.status
 
 echo "[*] Triggering D1 Sync..."
-./venv/bin/python3 lib/d1_manager.py || echo "[!] D1 Sync skipped or failed."
+# Run as REMOTE_USER to ensure DB schema is created with correct ownership
+sudo -u "$REMOTE_USER" ./venv/bin/python3 lib/d1_manager.py || echo "[!] D1 Sync skipped or failed."
+
+# Ensure final ownership for remote user (backups run as this user, not root)
+echo "[*] Fixing specific permissions..."
+sudo chown -R "$REMOTE_USER":"$REMOTE_USER" /var/tmp/wp-backup-work "$INSTALL_DIR"
 
 echo ""
 echo "Timer Status:"
@@ -129,7 +132,8 @@ scp -P ${REMOTE_PORT} bundle.tar.zst remote_setup.sh ${SSH_TARGET}:${REMOTE_DIR}
 
 # 4. Remote Setup
 echo "[*] Running remote setup..."
-ssh -p ${REMOTE_PORT} -t ${SSH_TARGET} "cd ${REMOTE_DIR} && sudo bash remote_setup.sh ${REMOTE_DIR}"
+# Pass REMOTE_USER as argument to script
+ssh -p ${REMOTE_PORT} -t ${SSH_TARGET} "cd ${REMOTE_DIR} && sudo bash remote_setup.sh ${REMOTE_DIR} ${REMOTE_USER}"
 
 # Cleanup
 rm -f bundle.tar.zst remote_setup.sh
