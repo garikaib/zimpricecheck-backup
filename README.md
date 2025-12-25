@@ -1,6 +1,6 @@
 # WordPress Backup System
 
-**Multi-Site SaaS Edition** — Automated backup for multiple WordPress sites with S3-compatible storage and Cloudflare D1 synchronization.
+**Multi-Site SaaS Edition** — Automated backup for multiple WordPress sites with prioritized S3 storage, concurrency control, and Cloudflare D1 synchronization.
 
 ## Quick Start
 
@@ -26,12 +26,29 @@ cd wordpress-backup
 
 ## Key Features
 
-- **Unified Configuration**: Single `config.json` for sites and storage priority
-- **Weighted Failover**: Define multiple S3-compatible servers with priority weights
-- **Multi-Site**: Back up unlimited WordPress sites from one installation
-- **Remote-First**: Configure locally, sites detected on server during deploy
-- **Server Isolation**: Each server uses unique `SERVER_ID` for storage/logs
-- **Cloudflare D1**: Centralized logging across server fleet
+- **Unified Configuration**: Single `config.json` for sites and storage priority.
+- **Weighted Failover**: Define multiple S3-compatible servers with priority weights. The system tries servers in descending order of weight.
+- **Multi-Site**: Back up unlimited WordPress sites from one installation.
+- **Interactive Management**: 
+  - Detects if a backup is already running.
+  - Prompts to **Stop & Restart** (apply new config) or **Continue**.
+  - Detailed progress tracking (e.g., `[1/5] Backing up Site A...`).
+- **Remote-First**: Configure locally, sites detected on server during deploy.
+- **Server Isolation**: Each server uses unique `SERVER_ID` for storage/logs.
+- **Cloudflare D1**: Centralized logging across server fleet.
+
+## Interactive Usage
+
+When running `./run.sh` manually (foreground mode):
+
+```text
+⚠️ WARNING: Another backup (PID 1234) is currently running.
+   Current Activity: Starting backup for site1
+
+Do you want to:
+  [s]top & restart (Cancel logic, clean up, and start fresh with new config)
+  [c]ontinue       (Let current backup finish)
+```
 
 ## S3 Storage (config.json)
 
