@@ -110,14 +110,8 @@ deploy_master() {
         --exclude='master/.env' \
         --exclude='venv' \
         --exclude='./.git' \
-        --exclude='./lib' \
-        --exclude='./docs' \
-        --exclude='./backups' \
-        --exclude='*.tar.zst' \
-        --exclude='*.pyc' \
-        --exclude='__pycache__' \
         --exclude='master.db' \
-        -c master .env | zstd - > bundle.tar.zst
+        -c master .env lib | zstd - > bundle.tar.zst
 
     # Generate Master Setup Script
     cat > remote_setup.sh << 'REMOTE_SCRIPT'
