@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
+from datetime import datetime
 from master.db.models import UserRole
 
 # -- User Schemas --
@@ -87,3 +88,62 @@ class NodeStatsBase(BaseModel):
 
 class NodeStatsCreate(NodeStatsBase):
     node_api_key: str # Simple auth for now
+
+# -- Extended Node Schemas --
+class NodeDetailResponse(NodeBase):
+    id: int
+    status: str
+    storage_quota_gb: int
+    total_available_gb: int
+    storage_used_gb: float = 0.0
+    sites_count: int = 0
+    backups_count: int = 0
+    class Config:
+        from_attributes = True
+
+class NodeQuotaUpdate(BaseModel):
+    storage_quota_gb: int
+
+class NodeSimple(BaseModel):
+    id: int
+    hostname: str
+    class Config:
+        from_attributes = True
+
+# -- Site Schemas --
+class SiteResponse(SiteBase):
+    id: int
+    node_id: int
+    status: str
+    storage_used_gb: float = 0.0
+    last_backup: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+class SiteListResponse(BaseModel):
+    sites: List[SiteResponse]
+    total: int
+
+class SiteSimple(BaseModel):
+    id: int
+    name: str
+    node_id: int
+    class Config:
+        from_attributes = True
+
+# -- Backup Schemas --
+class BackupResponse(BaseModel):
+    id: int
+    site_id: int
+    site_name: str
+    filename: str
+    size_gb: float
+    created_at: datetime
+    backup_type: str
+    status: str
+    class Config:
+        from_attributes = True
+
+class BackupListResponse(BaseModel):
+    backups: List[BackupResponse]
+    total: int

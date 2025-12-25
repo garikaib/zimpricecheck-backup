@@ -40,6 +40,7 @@ class Node(Base):
     is_active = Column(Boolean, default=True)
     status = Column(Enum(NodeStatus), default=NodeStatus.PENDING)
     storage_quota_gb = Column(Integer, default=100)
+    total_available_gb = Column(Integer, default=1000)
     
     # Ownership (Node Admin)
     admin_id = Column(Integer, ForeignKey("users.id"))
@@ -55,6 +56,8 @@ class Site(Base):
     name = Column(String, index=True)
     wp_path = Column(String)
     db_name = Column(String)
+    status = Column(String, default="active")  # active, paused, error
+    storage_used_bytes = Column(Integer, default=0)
     
     # Belongs to a Node
     node_id = Column(Integer, ForeignKey("nodes.id"))
@@ -73,7 +76,8 @@ class Backup(Base):
     filename = Column(String)
     s3_path = Column(String)
     size_bytes = Column(Integer)
-    status = Column(String) # SUCCESS, ERROR
+    status = Column(String)  # SUCCESS, ERROR
+    backup_type = Column(String, default="full")  # full, incremental
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     site_id = Column(Integer, ForeignKey("sites.id"))
