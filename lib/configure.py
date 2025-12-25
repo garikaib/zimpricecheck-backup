@@ -28,6 +28,85 @@ except ImportError:
     def prompt_select_sites(sites): return sites
     def is_remote_environment(): return os.path.isdir("/var/www")
 
+# Import Master Modules (if available)
+try:
+    sys.path.insert(0, BASE_DIR) # Add root to path to find 'master'
+    from master.db import models
+    from master.db.session import SessionLocal
+    from master.core.security import get_password_hash
+    MASTER_AVAILABLE = True
+except ImportError:
+    MASTER_AVAILABLE = False
+
+
+def list_admins():
+    """List all Super Admins."""
+    if not MASTER_AVAILABLE:
+        print("[!] Master module not found. Run this on the Master Server.")
+        return
+
+    db = SessionLocal()
+    admins = db.query(models.User).filter(models.User.role == models.UserRole.SUPER_ADMIN).all()
+    db.close()
+
+    print("\n--- Current Super Admins ---")
+    if not admins:
+        print("  (None found)")
+    else:
+        for a in admins:
+            print(f"  - {a.email} ({a.full_name}) [Active: {a.is_active}]")
+    print()
+
+def add_admin_interactive():
+    """Interactive loop to add/update admins."""
+    if not MASTER_AVAILABLE:
+        print("[!] Master module not found. Run this on the Master Server.")
+        return
+
+    while True:
+        list_admins()
+        
+        print("Options:")
+        print("  1. Add New Admin")
+        print("  2. Exit")
+        
+        choice = input("\nChoice [1/2]: ").strip()
+        
+        if choice == '2':
+            break
+        
+        if choice == '1':
+            email = input("Email: ").strip()
+            if not email: continue
+            
+            password = input("Password: ").strip()
+            full_name = input("Full Name [Admin]: ").strip() or "Admin"
+            
+            db = SessionLocal()
+            user = db.query(models.User).filter(models.User.email == email).first()
+            
+            if user:
+                print(f"[!] User {email} already exists.")
+                update = input("Update password? [y/N]: ").strip().lower()
+                if update == 'y':
+                    user.hashed_password = get_password_hash(password)
+                    user.full_name = full_name
+                    db.commit()
+                    print(f"[+] User updated!")
+            else:
+                user = models.User(
+                    email=email,
+                    hashed_password=get_password_hash(password),
+                    full_name=full_name,
+                    role=models.UserRole.SUPER_ADMIN,
+                    is_active=True
+                )
+                db.add(user)
+                db.commit()
+                print(f"[+] User created!")
+            
+            db.close()
+
 
 def prompt(label, default=None, required=True):
     """Prompt user for input."""
@@ -557,10 +636,15 @@ def main():
     parser.add_argument("--systemd", action="store_true", help="Generate systemd files only")
     parser.add_argument("--detect", action="store_true", help="Auto-detect WordPress sites")
     parser.add_argument("--validate", action="store_true", help="Validate configuration")
+    parser.add_argument("--add-admin", action="store_true", help="Manage Super Admins (Master only)")
     
     args = parser.parse_args()
     
     # Special modes
+    if args.add_admin:
+        add_admin_interactive()
+        return
+
     if args.systemd:
         env_config = load_env()
         generate_systemd(env_config)

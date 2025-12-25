@@ -5,9 +5,10 @@
 set -e
 
 MODE="${1:-node}"
+TEST_FLAG="$2"
 
 if [[ "$MODE" != "node" && "$MODE" != "master" ]]; then
-    echo "Usage: ./deploy.sh [node|master]"
+    echo "Usage: ./deploy.sh [node|master] [--test]"
     exit 1
 fi
 
@@ -137,6 +138,12 @@ if [ ! -d "venv" ]; then python3 -m venv venv; fi
 echo "[*] Initializing Database..."
 PYTHONPATH=. ./venv/bin/python3 master/init_db.py
 
+echo "[*] Verifying Super Admins..."
+./venv/bin/python3 lib/configure.py --add-admin <<EOF
+2
+EOF
+# Note: The above runs add-admin interactively but instantly exits (Option 2) to trigger the list_admins() print.
+
 echo "[*] Creating Systemd Service..."
 cat > wordpress-master.service <<EOF
 [Unit]
@@ -188,3 +195,20 @@ echo ""
 echo "============================================="
 echo "        Deployment Complete!"
 echo "============================================="
+
+# Test Mode: Create Tunnel
+if [[ "$MODE" == "master" && "$TEST_FLAG" == "--test" ]]; then
+    echo ""
+    echo "[*] TEST MODE: Establishing SSH Tunnel..."
+    echo "    Forwarding localhost:8001 -> ${REMOTE_HOST}:8000"
+    echo "    You can now access the API at http://localhost:8001"
+    echo "    Press Ctrl+C to stop the tunnel."
+    
+    # Check if port 8001 is already in use
+    if lsof -Pi :8001 -sTCP:LISTEN -t >/dev/null ; then
+        echo "[!] Port 8001 is already in use. Killing old tunnel..."
+        lsof -ti:8001 | xargs kill -9 2>/dev/null || true
+    fi
+    
+    ssh -N -L 8001:localhost:8000 -p ${REMOTE_PORT} ${SSH_TARGET}
+fi
