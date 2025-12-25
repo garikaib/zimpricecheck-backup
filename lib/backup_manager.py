@@ -94,7 +94,8 @@ def init_db():
                   timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, 
                   status TEXT, 
                   details TEXT,
-                  site_name TEXT)''')
+                  site_name TEXT,
+                  server_id TEXT)''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS mega_archives
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,17 +103,26 @@ def init_db():
                   mega_account TEXT NOT NULL,
                   file_size INTEGER,
                   upload_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                  site_name TEXT)''')
+                  site_name TEXT,
+                  server_id TEXT)''')
+    
+    # Migration: add server_id if missing
+    for table in ['backup_log', 'mega_archives']:
+        try:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN server_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+    
     conn.commit()
     conn.close()
 
 def log_job(status, details, site_name="system"):
-    print(f"[{site_name}] [{status}] {details}")
+    print(f"[{SERVER_ID}:{site_name}] [{status}] {details}")
     try:
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
-        c.execute("INSERT INTO backup_log (status, details, site_name) VALUES (?, ?, ?)", 
-                  (status, details, site_name))
+        c.execute("INSERT INTO backup_log (status, details, site_name, server_id) VALUES (?, ?, ?, ?)", 
+                  (status, details, site_name, SERVER_ID))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -201,8 +211,8 @@ def upload_to_mega(filepath, filename, file_size, site_name):
                 full_remote = f"{remote_dir}/{filename}"
                 conn = sqlite3.connect(DB_FILE)
                 c = conn.cursor()
-                c.execute("INSERT INTO mega_archives (filename, mega_account, file_size, site_name) VALUES (?, ?, ?, ?)",
-                          (full_remote, account['email'], file_size, site_name))
+                c.execute("INSERT INTO mega_archives (filename, mega_account, file_size, site_name, server_id) VALUES (?, ?, ?, ?, ?)",
+                          (full_remote, account['email'], file_size, site_name, SERVER_ID))
                 conn.commit()
                 conn.close()
                 log_job("SUCCESS", f"Uploaded to {account['email']}", site_name)
