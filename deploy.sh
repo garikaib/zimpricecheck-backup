@@ -161,7 +161,20 @@ EOF
 
 sudo mv wordpress-master.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now wordpress-master.service
+sudo systemctl enable wordpress-master.service
+
+echo "[*] Restarting Master Server..."
+sudo systemctl restart wordpress-master.service
+sleep 2
+
+echo "[*] Verifying service status..."
+if sudo systemctl is-active --quiet wordpress-master.service; then
+    echo "[+] Service is running!"
+else
+    echo "[!] Service failed to start. Checking logs..."
+    sudo journalctl -u wordpress-master.service -n 20 --no-pager
+    exit 1
+fi
 
 echo "[*] Fixing permissions..."
 sudo chown -R "$REMOTE_USER":"$REMOTE_USER" "$INSTALL_DIR"

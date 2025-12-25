@@ -118,6 +118,82 @@ Nodes do not log in. They include their API Key in the header of every request.
 
 ---
 
+## User Management Endpoints
+
+### Get Current User
+**Endpoint**: `GET /users/me`
+**Auth**: Bearer Token (Any authenticated user)
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "email": "admin@example.com",
+  "full_name": "Admin User",
+  "is_active": true,
+  "role": "super_admin"
+}
+```
+
+### List Users
+**Endpoint**: `GET /users/`
+**Auth**: Bearer Token (Node Admin+)
+**Query Params**: `skip` (int), `limit` (int)
+
+**Response (200 OK):**
+```json
+{
+  "users": [
+    {
+      "id": 1,
+      "email": "admin@example.com",
+      "full_name": "Admin",
+      "is_active": true,
+      "role": "super_admin"
+    }
+  ],
+  "total": 1
+}
+```
+
+### Create User
+**Endpoint**: `POST /users/`
+**Auth**: Bearer Token (Super Admin only)
+
+**Body:**
+```json
+{
+  "email": "newuser@example.com",
+  "password": "securepassword",
+  "full_name": "New User",
+  "role": "site_admin"
+}
+```
+
+### Get User by ID
+**Endpoint**: `GET /users/{user_id}`
+**Auth**: Bearer Token (Node Admin+)
+
+### Update User
+**Endpoint**: `PUT /users/{user_id}`
+**Auth**: Bearer Token (Node Admin+)
+
+**Body:**
+```json
+{
+  "full_name": "Updated Name",
+  "is_active": false
+}
+```
+
+### Delete User
+**Endpoint**: `DELETE /users/{user_id}`
+**Auth**: Bearer Token (Super Admin only)
+
+> **Note:** Users cannot delete themselves.
+
+---
+
 ## Statistics Endpoints
 
 ### Report Node Stats
@@ -151,6 +227,6 @@ Nodes do not log in. They include their API Key in the header of every request.
 *   `blocked`: Explicitly denied access.
 
 ### UserRole
-*   `super_admin`: Full access.
-*   `node_admin`: Can manage own nodes (Future).
-*   `site_admin`: Can manage own sites (Future).
+*   `super_admin`: Full access to all users, nodes, and sites.
+*   `node_admin`: Can manage nodes and Site Admins assigned to their nodes.
+*   `site_admin`: Can only view own profile via `/users/me`.
