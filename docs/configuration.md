@@ -1,65 +1,91 @@
 # Configuration Reference
 
-The system uses two configuration files:
-1. `.env` - Deployment target, SMTP, and system settings
-2. `config.json` - Sites and S3 storage
+The system relies on two distinct configuration files for different purposes.
 
-## 1. Environment Config (.env)
+## 1. System Config: `.env`
 
-Managed via `./configure.sh`.
+The `.env` file handles **Deployment Targets**, **Credentials**, and **Global Settings**. It is NOT version controlled.
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `REMOTE_HOST` | Target server IP/domain | - |
-| `REMOTE_USER` | SSH Username | `ubuntu` |
-| `SERVER_ID` | Unique ID for this server instance | (Hostname) |
-| `SMTP_SERVER` | SMTP Hostname | - |
-| `SMTP_PORT` | SMTP Port | `587` |
-| `BACKUP_FREQUENCY` | `daily`, `twice`, `every-6h` | `daily` |
-| `RETENTION_S3_DAYS` | Days to keep remote backups | `7` |
+**Management**: Use `./configure.sh` (Main Menu) or edit manually.
 
-## 2. Unified Config (config.json)
+| Category | Variable | Description |
+|---|---|---|
+| **Deployment** | `REMOTE_HOST` | Target VPS IP or Domain |
+| | `REMOTE_USER` | SSH Username (default: `ubuntu`) |
+| | `REMOTE_DIR` | Installation path |
+| **Identity** | `SERVER_ID` | Unique ID for this server instance (e.g., hostname) |
+| **Master** | `MASTER_URL` | URL of Master Server (Node Mode only) |
+| | `NODE_API_KEY` | Auto-generated key (Node Mode only) |
+| **Notifications** | `SMTP_SERVER` | SMTP Hostname |
+| | `SMTP_USER` | SMTP Username |
+| | `SMTP_PASSWORD` | SMTP Password |
+| **Cloudflare** | `CLOUDFLARE_ACCOUNT_ID` | D1 Logging Account ID |
+| | `CLOUDFLARE_API_TOKEN` | D1 API Token |
 
-Contains lists of sites and storage providers.
+---
 
-### Sites Array
-See [Managing Sites](sites.md).
+## 2. Backup Config: `config.json`
 
-```json
-"sites": [
-  {
-    "name": "mysite",
-    "wp_config_path": "/path/to/wp-config.php",
-    ...
-  }
-]
-```
+The `config.json` file handles **Site Definitions** and **S3 Storage Destinations**. It IS designed to be portable/shared if needed.
 
-### Storage Array
-See [S3 Storage](s3-storage.md).
+**Management**: Use `./configure.sh` (Sub-menus) or edit manually.
+
+### A. Sites Array
+Defines the WordPress installations to back up.
+*See [Managing Sites](sites.md) for details.*
 
 ```json
-"storage": [
-  {
-    "name": "idrive",
-    "type": "s3",
-    "endpoint": "...",
-    "weight": 100
-  }
-]
+{
+  "sites": [
+    {
+      "name": "my-blog",
+      "wp_config_path": "/var/www/html/wp-config.php",
+      "wp_content_path": "/var/www/html/wp-content",
+      "db_name": "wp_db" // Optional overrides
+    }
+  ]
+}
 ```
 
-## Setup Wizard
+### B. Storage Array
+Defines S3-compatible destinations with failover priority.
+*See [S3 Storage](s3-storage.md) for details.*
 
-The `./configure.sh` script is the primary interface for managing both files.
+```json
+{
+  "storage": [
+    {
+      "name": "primary-storage",
+      "type": "s3",
+      "endpoint": "t5k4.ldn.idrivee2-61.com",
+      "bucket": "backups-bucket",
+      "weight": 100
+    },
+    {
+      "name": "fallback-storage",
+      "type": "s3",
+      "endpoint": "s3.amazonaws.com",
+      "bucket": "emergency-bucket",
+      "weight": 50
+    }
+  ]
+}
+```
+
+## 3. Setup Wizard
+
+The `./configure.sh` script is the primary tool for managing both files interactively.
 
 ```bash
-# Standard wizard (env + optional sections)
+# Main Wizard (Manage .env, Email, D1)
 ./configure.sh
 
-# Detect sites (populates config.json)
+# Site Detection (Populates config.json)
 ./configure.sh --detect
 
-# Validate configuration
+# Admin Management (Master Server Only)
+./configure.sh --add-admin
+
+# Validation
 ./configure.sh --validate
 ```

@@ -46,3 +46,25 @@ Configuration is handled via `.env` in the `master/` directory (created during d
 | `SECRET_KEY` | JWT Signing Key | (Change in Prod) |
 | `FIRST_SUPERUSER` | Initial Admin Email | `admin@example.com` |
 | `FIRST_SUPERUSER_PASSWORD` | Initial Admin Pass | `admin123` |
+
+## User Management
+
+### 1. Initial Super Admin
+When you first deploy the Master Server, an initial Super Admin is created based on the `.env` variables above. 
+Logs: `[*] Creating first superuser: admin@example.com`
+
+### 2. Adding More Admins
+You can manage Super Admins interactively via the configuration script on the Master Server:
+
+```bash
+# SSH into Master
+ssh ubuntu@<master-ip>
+cd /opt/wordpress-backup-master
+
+# Launch Admin Manager
+./configure.sh --add-admin
+```
+This utility allows you to:
+-   **List** current admins.
+-   **Add** new admins.
+-   **Modify** existing admins (reset passwords).
