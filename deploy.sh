@@ -102,10 +102,15 @@ if [ -d "systemd" ]; then
     sudo systemctl start wordpress-backup.timer wordpress-report.timer 2>/dev/null || true
 fi
 
-echo "[*] Ensuring directories..."
+echo "[*] Ensuring directories and permissions..."
 sudo mkdir -p "$INSTALL_DIR/backups"
 sudo mkdir -p /var/tmp/wp-backup-work
+
+# Fix ownership for ubuntu user (backups run as ubuntu, not root)
 sudo chown -R ubuntu:ubuntu /var/tmp/wp-backup-work "$INSTALL_DIR"
+
+# Clean up any stale lock files (may have wrong permissions from prior runs)
+sudo rm -f /var/tmp/wp-backup.pid /var/tmp/wp-backup.status
 
 echo "[*] Triggering D1 Sync..."
 ./venv/bin/python3 lib/d1_manager.py || echo "[!] D1 Sync skipped or failed."
