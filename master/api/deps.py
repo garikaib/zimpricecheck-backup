@@ -99,3 +99,13 @@ def get_current_superuser(
             status_code=400, detail="The user doesn't have enough privileges"
         )
     return current_user
+
+def get_current_node_admin_or_higher(
+    current_user: models.User = Depends(get_current_active_user),
+) -> models.User:
+    """Allow Node Admins and Super Admins."""
+    if current_user.role not in [models.UserRole.SUPER_ADMIN, models.UserRole.NODE_ADMIN]:
+        raise HTTPException(
+            status_code=403, detail="Insufficient privileges"
+        )
+    return current_user

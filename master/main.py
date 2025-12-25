@@ -1,8 +1,9 @@
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from master.core.config import get_settings
-from master.api.v1.endpoints import auth, nodes, stats
+from master.api.v1.endpoints import auth, nodes, stats, users
 from fastapi import APIRouter
 
 # Configure logging to show our debug messages
@@ -17,6 +18,19 @@ app = FastAPI(
     title=settings.APP_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+
+# Debug middleware to log headers for /nodes/ requests
+class HeaderLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if "/nodes" in request.url.path:
+            print(f"[HEADERS] {request.method} {request.url.path}")
+            print(f"[HEADERS] Origin: {request.headers.get('origin', 'NO ORIGIN')}")
+            print(f"[HEADERS] Authorization: {request.headers.get('authorization', 'NO AUTH HEADER')[:80] if request.headers.get('authorization') else 'NO AUTH HEADER'}")
+            print(f"[HEADERS] All headers: {dict(request.headers)}")
+        response = await call_next(request)
+        return response
+
+app.add_middleware(HeaderLoggingMiddleware)
 
 # CORS
 app.add_middleware(
@@ -38,6 +52,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(nodes.router, prefix="/nodes", tags=["nodes"])
 api_router.include_router(stats.router, prefix="/stats", tags=["stats"])
+api_router.include_router(users.router, prefix="/users", tags=["users"])
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

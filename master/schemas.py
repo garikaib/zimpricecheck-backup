@@ -17,6 +17,17 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+    is_active: Optional[bool] = None
+    role: Optional[UserRole] = None
+    password: Optional[str] = None
+
+class UserListResponse(BaseModel):
+    users: List[UserResponse]
+    total: int
+
 # -- Auth Schemas --
 class LoginRequest(BaseModel):
     username: str

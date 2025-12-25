@@ -56,6 +56,26 @@ Configuration is handled via `.env` in the `master/` directory (created during d
 
 ## User Management
 
+> **See also**: [Users API Reference](users.md) for full endpoint documentation.
+
+### Roles
+
+| Role | Access Level |
+|------|--------------|
+| `super_admin` | Full system access |
+| `node_admin` | Manage nodes + Site Admins on their nodes |
+| `site_admin` | Manage own sites only |
+
+### API Endpoints (Summary)
+
+| Endpoint | Method | Access |
+|----------|--------|--------|
+| `/api/v1/users/me` | GET | Any authenticated |
+| `/api/v1/users/` | GET | Node Admin+ |
+| `/api/v1/users/` | POST | Super Admin |
+| `/api/v1/users/{id}` | GET/PUT | Node Admin+ |
+| `/api/v1/users/{id}` | DELETE | Super Admin |
+
 ### 1. Initial Super Admin
 When you first deploy the Master Server, an initial Super Admin is created based on the `.env` variables above. 
 Logs: `[*] Creating first superuser: admin@example.com`
