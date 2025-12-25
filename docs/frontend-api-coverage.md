@@ -55,20 +55,95 @@ interface UserResponse {
 
 | Endpoint | Method | Auth | Request | Response |
 |----------|--------|------|---------|----------|
+| `/nodes/` | GET | Bearer | `?skip=0&limit=100` | `NodeResponse[]` |
+| `/nodes/simple` | GET | Bearer | - | `NodeSimple[]` (for dropdowns) |
+| `/nodes/{id}` | GET | Bearer (Node Admin+) | - | `NodeDetailResponse` |
+| `/nodes/{id}/quota` | PUT | Bearer (Super Admin) | `{storage_quota_gb: int}` | `NodeResponse` |
+| `/nodes/{id}/sites` | GET | Bearer (Node Admin+) | `?skip=0&limit=100` | `SiteListResponse` |
+| `/nodes/{id}/backups` | GET | Bearer (Node Admin+) | `?site_id=&skip=0&limit=50` | `BackupListResponse` |
+| `/nodes/{id}/backups/{backup_id}` | DELETE | Bearer (Super Admin) | - | `{status, backup_id}` |
 | `/nodes/join-request` | POST | None | `{hostname, ip_address, system_info?}` | `{request_id, message}` |
 | `/nodes/status/{request_id}` | GET | None | - | `{status, api_key?}` |
 | `/nodes/approve/{node_id}` | POST | Bearer (Super Admin) | - | `NodeResponse` |
-| `/nodes/` | GET | Bearer | `?skip=0&limit=100` | `NodeResponse[]` |
 
 ### Types
 
 ```typescript
+interface NodeSimple {
+  id: number;
+  hostname: string;
+}
+
+interface NodeDetailResponse {
+  id: number;
+  hostname: string;
+  ip_address: string | null;
+  status: 'pending' | 'active' | 'blocked';
+  storage_quota_gb: number;
+  total_available_gb: number;
+  storage_used_gb: number;
+  sites_count: number;
+  backups_count: number;
+}
+
 interface NodeResponse {
   id: number;
   hostname: string;
   ip_address: string | null;
   status: 'pending' | 'active' | 'blocked';
   storage_quota_gb: number;
+}
+```
+
+---
+
+## Sites
+
+| Endpoint | Method | Auth | Request | Response |
+|----------|--------|------|---------|----------|
+| `/sites/` | GET | Bearer | `?skip=0&limit=100` | `SiteListResponse` |
+| `/sites/simple` | GET | Bearer | `?node_id=` | `SiteSimple[]` (for dropdowns) |
+| `/sites/{id}` | GET | Bearer | - | `SiteResponse` |
+
+### Types
+
+```typescript
+interface SiteSimple {
+  id: number;
+  name: string;
+  node_id: number;
+}
+
+interface SiteResponse {
+  id: number;
+  name: string;
+  wp_path: string;
+  db_name: string | null;
+  node_id: number;
+  status: string;
+  storage_used_gb: number;
+  last_backup: string | null;
+}
+
+interface SiteListResponse {
+  sites: SiteResponse[];
+  total: number;
+}
+
+interface BackupResponse {
+  id: number;
+  site_id: number;
+  site_name: string;
+  filename: string;
+  size_gb: number;
+  created_at: string;
+  backup_type: 'full' | 'incremental';
+  status: string;
+}
+
+interface BackupListResponse {
+  backups: BackupResponse[];
+  total: number;
 }
 ```
 
