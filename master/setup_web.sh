@@ -30,7 +30,7 @@ if sudo lsof -Pi :80 -sTCP:LISTEN -t >/dev/null; then
     sudo systemctl stop nginx
 fi
 
-sudo lego --email="$EMAIL" --domains="$DOMAIN" --http :80 run
+sudo lego --email="$EMAIL" --domains="$DOMAIN" --accept-tos --path "/etc/lego" --http run
 
 # 4. Apply Nginx Config
 echo "  -> Configuring Nginx..."
@@ -44,7 +44,7 @@ sudo systemctl reload nginx
 
 # 6. Setup Renewal Cron
 echo "  -> Setting up Auto-Renewal..."
-(crontab -l 2>/dev/null; echo "0 0 1 * * /usr/local/bin/lego --domains=$DOMAIN --email=$EMAIL --http :80 renew && systemctl reload nginx") | crontab -
+(crontab -l 2>/dev/null; echo "0 0 1 * * /usr/local/bin/lego --domains=$DOMAIN --email=$EMAIL --accept-tos --path '/etc/lego' --http renew && systemctl reload nginx") | crontab -
 
 echo ""
 echo "[+] Web Layer Active!"
