@@ -15,11 +15,26 @@ fi
 
 SERVER_ID="$1"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env"
 
 echo "============================================="
 echo "  Migration: server_id = '$SERVER_ID'"
 echo "============================================="
 echo ""
+
+# Set SERVER_ID in .env (append or update)
+if [ -f "$ENV_FILE" ]; then
+    if grep -q "^SERVER_ID=" "$ENV_FILE"; then
+        sed -i "s/^SERVER_ID=.*/SERVER_ID=\"$SERVER_ID\"/" "$ENV_FILE"
+        echo "[+] Updated SERVER_ID in .env"
+    else
+        echo "SERVER_ID=\"$SERVER_ID\"" >> "$ENV_FILE"
+        echo "[+] Added SERVER_ID to .env"
+    fi
+else
+    echo "SERVER_ID=\"$SERVER_ID\"" > "$ENV_FILE"
+    echo "[+] Created .env with SERVER_ID"
+fi
 
 # Activate venv if present
 if [ -f "$SCRIPT_DIR/venv/bin/activate" ]; then
@@ -27,6 +42,7 @@ if [ -f "$SCRIPT_DIR/venv/bin/activate" ]; then
 fi
 
 # Run DB migration
+echo ""
 echo "[1/2] Running database migration..."
 python3 "$SCRIPT_DIR/migrate_db_server_id.py" "$SERVER_ID" <<< "y"
 
@@ -39,6 +55,7 @@ python3 "$SCRIPT_DIR/migrate_mega_storage.py" "$SERVER_ID" <<< "y"
 echo ""
 echo "============================================="
 echo "  Migration Complete!"
+echo "  SERVER_ID='$SERVER_ID' saved to .env"
 echo "============================================="
 echo ""
 echo "[*] Cleaning up migration files..."
@@ -50,4 +67,4 @@ rm -f "$SCRIPT_DIR/migrate.sh"
 
 echo "[+] Migration files deleted."
 echo ""
-echo "You can now run: ./deploy.sh"
+echo "Future backups/syncs will use server_id='$SERVER_ID'"
