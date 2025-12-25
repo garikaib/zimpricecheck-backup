@@ -3,12 +3,33 @@
 This document provides extensive documentation for the Master Server API, intended for building Admin Panels or integrating third-party tools.
 
 ## Base URL
-*   Production: `http://<master-ip>:8000/api/v1`
-*   Test Tunnel: `http://localhost:8001/api/v1` (via `./deploy.sh master --test`)
+
+| Environment | URL |
+|-------------|-----|
+| **Production** | `https://wp.zimpricecheck.com:8081/api/v1` |
+| **Local Tunnel** | `http://localhost:8001/api/v1` (via `./deploy.sh master --test`) |
+
+## CORS Configuration
+
+The API supports Cross-Origin Resource Sharing (CORS) for frontend development.
+
+**Allowed Origins:**
+- `http://localhost:*` (any port)
+- `https://zimpricecheck.com`
+- `https://wp.zimpricecheck.com`
+
+**Allowed Headers:**
+- `Authorization`
+- `Content-Type`
+- `X-API-KEY`
+
+**Credentials:** Enabled (`Access-Control-Allow-Credentials: true`)
+
+---
 
 ## Authentication
 
-The API uses **OAuth2 Password Bearer** flow for Admins and **API Keys** for Nodes.
+The API uses **JWT Bearer Tokens** for Admin authentication and **API Keys** for Node authentication.
 
 ### 1. Admin Login (JWT)
 **Endpoint**: `POST /auth/login`
@@ -28,6 +49,12 @@ The API uses **OAuth2 Password Bearer** flow for Admins and **API Keys** for Nod
   "access_token": "eyJhbGciOi...",
   "token_type": "bearer"
 }
+```
+
+**Using the Token:**
+Include the token in subsequent requests:
+```
+Authorization: Bearer <access_token>
 ```
 
 ### 2. Node Authentication
