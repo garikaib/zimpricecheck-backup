@@ -118,18 +118,17 @@ class D1Manager:
         for sql in schemas:
             self.execute_remote(sql)
         
-        # Migration: Add server_id column if missing
-        migrations = [
-            "ALTER TABLE backup_log ADD COLUMN server_id TEXT;",
-            "ALTER TABLE mega_archives ADD COLUMN server_id TEXT;",
-            "ALTER TABLE daily_emails ADD COLUMN server_id TEXT;"
-        ]
-        
-        for sql in migrations:
-            try:
-                self.execute_remote(sql)
-            except:
-                pass
+        # Migration: Add server_id column only if missing
+        # Check existing columns via PRAGMA (D1 supports this)
+        tables_to_migrate = ["backup_log", "mega_archives", "daily_emails"]
+        for table in tables_to_migrate:
+            # Check if server_id column exists
+            res = self.execute_remote(f"PRAGMA table_info({table})")
+            if res and "results" in res:
+                columns = [row.get("name") for row in res["results"]]
+                if "server_id" not in columns:
+                    self.execute_remote(f"ALTER TABLE {table} ADD COLUMN server_id TEXT")
+                    self.log(f"Added server_id column to {table}")
 
     def sync_table(self, table_name, pk_field="id"):
         """Sync table filtered by server_id - each server only syncs its own records."""
