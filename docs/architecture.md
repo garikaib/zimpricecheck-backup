@@ -4,141 +4,69 @@
 
 ```
 /opt/wordpress-backup/
-├── configure.sh           # Config wrapper script
-├── deploy.sh              # Deployment script
-├── run.sh                 # Backup execution script
-├── requirements.txt       # Python dependencies
-
-├── .env                   # Global configuration (secrets)
-├── .env.sample            # Template for .env
-├── sites.json             # Site definitions (secrets)
-├── sites.json.sample      # Template for sites.json
-├── backups.db             # Local SQLite database
-
-├── lib/                   # Python application code
-│   ├── backup_manager.py  # Multi-site backup orchestration
-│   ├── configure.py       # Interactive configuration wizard
-│   ├── d1_manager.py      # Cloudflare D1 sync engine
-│   ├── s3_manager.py      # S3-compatible storage manager
-│   ├── report_manager.py  # Daily email report generator
-│   └── migrate_legacy.py  # Legacy migration utilities
-
-├── systemd/               # Generated systemd unit files
-│   ├── wordpress-backup.service
-│   ├── wordpress-backup.timer
-│   ├── wordpress-report.service
-│   └── wordpress-report.timer
-
-├── backups/               # Local backup archive storage
-│   └── {site}-backup-{timestamp}.tar.zst
-
-├── venv/                  # Python virtual environment
-
-└── docs/                  # Documentation
-    ├── installation.md
-    ├── configuration.md
-    ├── sites.md
-    ├── deployment.md
-    ├── backup.md
-    ├── cloudflare-d1.md
-    ├── s3-storage.md
-    ├── architecture.md
-    └── troubleshooting.md
+├── .env                # Deployment & Environment settings
+├── config.json         # Unified Sites & Storage config
+├── backups.db          # SQLite log database
+├── deploy.sh           # Deployment script
+├── configure.sh        # Setup wizard
+├── run.sh              # Entry point
+├── sites.json          # (Deprecated) Replaced by config.json
+├── lib/
+│   ├── backup_manager.py # Core logic
+│   ├── s3_manager.py     # S3 interface
+│   ├── d1_manager.py     # Cloudflare D1 sync
+│   ├── report_manager.py # Email reports
+│   └── configure.py      # Wizard logic
+└── venv/               # Python environment
 ```
 
-## Configuration Files
+## Data Flow
 
-| File | Purpose | In Git? |
-|------|---------|---------|
-| `.env` | Credentials and global settings | No |
-| `.env.sample` | Template showing all options | Yes |
-| `sites.json` | WordPress site configurations | No |
-| `sites.json.sample` | Template for sites | Yes |
-| `backups.db` | SQLite tracking database | No |
+```mermaid
+graph TD
+    Timer[Systemd Timer] --> RunScript[run.sh]
+    RunScript --> BackupMgr[backup_manager.py]
+    
+    BackupMgr --> |Read| Config[config.json]
+    BackupMgr --> |Read| Env[.env]
+    
+    BackupMgr --> |Back Up| Site[WordPress Site]
+    BackupMgr --> |Compress| Archive[tar.zst]
+    
+    BackupMgr --> |Upload| S3Mgr[s3_manager.py]
+    S3Mgr --> |Priority Sort| StorageList[Storage Servers]
+    
+    StorageList --> |Try Priority 1| S3Primary[S3: iDrive]
+    S3Primary -.-> |Fail| S3Failover[S3: AWS]
+    
+    BackupMgr --> |Log| DB[backups.db]
+    DB --> |Sync| D1Mgr[d1_manager.py]
+    D1Mgr --> |Push| Cloudflare[Cloudflare D1]
+```
 
-## Database Schema
+## Database Schema (Local SQLite & D1)
 
-### Local SQLite (`backups.db`)
-
-#### `backup_log`
-Tracks all backup operations.
+### `backup_log`
+Tracks execution status of backup jobs.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `id` | INTEGER | Primary key |
-| `timestamp` | DATETIME | When backup occurred |
-| `status` | TEXT | START, INFO, SUCCESS, ERROR, FATAL |
-| `details` | TEXT | Message |
-| `site_name` | TEXT | Which site (multi-site support) |
-| `server_id` | TEXT | Which server instance |
+| id | INTEGER PK | Logging ID |
+| timestamp | DATETIME | Execution time |
+| status | TEXT | SUCCESS, ERROR, WARNING |
+| details | TEXT | Error message or specific detail |
+| site_name | TEXT | Name of the site (from config.json) |
+| server_id | TEXT | Origin server ID |
 
-#### `s3_archives`
+### `s3_archives`
 Tracks files uploaded to S3-compatible storage.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `id` | INTEGER | Primary key |
-| `filename` | TEXT | Remote path (SERVER_ID/Year/Month/Day/file.tar.zst) |
-| `s3_endpoint` | TEXT | Which S3 endpoint |
-| `s3_bucket` | TEXT | Which S3 bucket |
-| `file_size` | INTEGER | Size in bytes |
-| `upload_timestamp` | DATETIME | When uploaded |
-| `site_name` | TEXT | Which site |
-| `server_id` | TEXT | Which server instance |
-
-#### `daily_emails`
-Tracks daily report emails.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | INTEGER | Primary key |
-| `date` | TEXT | Date (YYYY-MM-DD) |
-| `email_sent` | INTEGER | 0 or 1 |
-| `backup_count` | INTEGER | Backups that day |
-
-## Data Flow
-
-```
-┌─────────────────┐
-│   sites.json    │ ←── Site definitions
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐     ┌──────────────┐
-│ backup_manager  │────▶│   mysqldump  │ ── database.sql
-│     .py         │     └──────────────┘
-└────────┬────────┘
-         │              ┌──────────────┐
-         ├─────────────▶│     tar      │ ── wp-content.tar
-         │              └──────────────┘
-         │
-         ▼
-┌─────────────────┐     ┌──────────────┐
-│      zstd       │────▶│  .tar.zst    │
-└────────┬────────┘     └──────────────┘
-         │
-         ▼
-┌─────────────────┐     ┌──────────────┐
-│   s3_manager    │────▶│ S3 Storage   │
-│   (boto3)       │     │ (iDrive E2)  │
-└────────┬────────┘     └──────────────┘
-         │
-         ▼
-┌─────────────────┐     ┌──────────────┐
-│   backups.db    │────▶│ Cloudflare   │
-│   (SQLite)      │     │     D1       │
-└─────────────────┘     └──────────────┘
-```
-
-## Component Responsibilities
-
-| Component | Responsibility |
-|-----------|----------------|
-| `run.sh` | Entry point, arg parsing, venv activation |
-| `configure.sh` | Wrapper for lib/configure.py |
-| `deploy.sh` | Bundle, upload, remote setup, log reset |
-| `backup_manager.py` | Orchestrates multi-site backups |
-| `s3_manager.py` | Uploads to S3-compatible storage |
-| `d1_manager.py` | Bidirectional D1 sync with batching |
-| `configure.py` | Interactive wizard, file management |
-| `report_manager.py` | Generates daily email summaries |
+| id | INTEGER PK | Archive ID |
+| filename | TEXT | Remote filename |
+| storage_name | TEXT | Name of storage provider used |
+| s3_endpoint | TEXT | S3 Endpoint URL |
+| s3_bucket | TEXT | S3 Bucket Name |
+| file_size | INTEGER | Size in bytes |
+| server_id | TEXT | Origin server ID |

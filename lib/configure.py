@@ -4,12 +4,11 @@ WordPress Backup Configuration Wizard (SaaS Remote-First Edition)
 
 - Local: Configure deployment target, optional credentials, then deploy
 - Remote: Auto-detect sites, validate requirements, generate systemd
+- Unified Config: Manages sites and S3 storage in config.json
 """
 
 import os
 import sys
-import subprocess
-import sqlite3
 import argparse
 import json
 import uuid
@@ -18,7 +17,7 @@ from dotenv import dotenv_values
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
-SITES_PATH = os.path.join(BASE_DIR, "sites.json")
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 # Import site detector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -73,23 +72,25 @@ def save_env(config):
     
     with open(ENV_PATH, "w") as f:
         f.write("\n".join(lines) + "\n")
-    print(f"[+] Configuration saved to {ENV_PATH}")
+    print(f"[+] Env configuration saved to {ENV_PATH}")
 
 
-def load_sites():
-    if os.path.exists(SITES_PATH):
+def load_config():
+    """Load unified config.json."""
+    if os.path.exists(CONFIG_PATH):
         try:
-            with open(SITES_PATH, "r") as f:
-                return json.load(f).get("sites", [])
+            with open(CONFIG_PATH, "r") as f:
+                return json.load(f)
         except:
             pass
-    return []
+    return {"sites": [], "storage": []}
 
 
-def save_sites(sites):
-    with open(SITES_PATH, "w") as f:
-        json.dump({"sites": sites}, f, indent=2)
-    print(f"[+] Sites saved to {SITES_PATH}")
+def save_config(config):
+    """Save unified config.json."""
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=2)
+    print(f"[+] Configuration saved to {CONFIG_PATH}")
 
 
 def get_def(config, key, fallback=""):
@@ -98,55 +99,62 @@ def get_def(config, key, fallback=""):
 
 # --- Configuration Sections ---
 
-def configure_deployment(config):
+def configure_deployment(env_config):
     print("\n--- Deployment Target ---")
-    config["REMOTE_HOST"] = prompt("Remote Host (IP or domain)", get_def(config, "REMOTE_HOST", ""))
-    config["REMOTE_USER"] = prompt("SSH User", get_def(config, "REMOTE_USER", "ubuntu"))
-    config["REMOTE_PORT"] = prompt("SSH Port", get_def(config, "REMOTE_PORT", "22"))
-    config["REMOTE_DIR"] = prompt("Install Directory", get_def(config, "REMOTE_DIR", "/opt/wordpress-backup"))
-    return config
+    env_config["REMOTE_HOST"] = prompt("Remote Host (IP or domain)", get_def(env_config, "REMOTE_HOST", ""))
+    env_config["REMOTE_USER"] = prompt("SSH User", get_def(env_config, "REMOTE_USER", "ubuntu"))
+    env_config["REMOTE_PORT"] = prompt("SSH Port", get_def(env_config, "REMOTE_PORT", "22"))
+    env_config["REMOTE_DIR"] = prompt("Install Directory", get_def(env_config, "REMOTE_DIR", "/opt/wordpress-backup"))
+    return env_config
 
 
-def configure_s3(config):
-    """Configure S3-compatible storage servers."""
+def configure_s3(json_config):
+    """Configure S3-compatible storage servers in config.json."""
     print("\n--- S3 Storage ---")
     print("Configure S3-compatible storage (AWS S3, iDrive E2, Backblaze B2, etc.)")
-    print("You can add multiple servers. Leave endpoint blank to stop adding.\n")
+    print("Supports multiple servers with weighted priority (higher weight = tried first).")
     
-    server_num = 1
+    storage_list = json_config.get("storage", [])
     
-    # Find existing servers
-    while config.get(f"S3_SERVER_{server_num}_ENDPOINT"):
-        server_num += 1
-    
-    if server_num > 1:
-        print(f"[*] {server_num - 1} S3 server(s) already configured.")
-        modify = input("Add more servers? [y/N]: ").strip().lower()
+    # Display existing
+    if storage_list:
+        print("\nExisting Storage:")
+        for idx, s in enumerate(storage_list):
+            print(f"  {idx+1}. {s.get('name')} ({s.get('endpoint')}/{s.get('bucket')}) [Weight: {s.get('weight')}]")
+        
+        modify = input("\nAdd more servers? [y/N]: ").strip().lower()
         if modify != 'y':
-            return config
+            return json_config
     
     while True:
-        print(f"\n--- S3 Server {server_num} ---")
-        prefix = f"S3_SERVER_{server_num}_"
+        print(f"\n--- Add New S3 Server ---")
         
-        endpoint = prompt("S3 Endpoint (e.g., s3.amazonaws.com)", "", required=False)
+        name = prompt("Friendly Name (e.g. idrive-primary)", f"s3-server-{len(storage_list)+1}")
+        endpoint = prompt("S3 Endpoint (e.g. s3.amazonaws.com)", "", required=False)
         if not endpoint:
             break
+            
+        server = {
+            "name": name,
+            "type": "s3",
+            "endpoint": endpoint,
+            "region": prompt("Region Code", "us-east-1"),
+            "access_key": prompt("Access Key ID", ""),
+            "secret_key": prompt("Secret Access Key", ""),
+            "bucket": prompt("Bucket Name", "wordpress-backups"),
+            "weight": int(prompt("Priority Weight (1-100)", "100")),
+            "storage_limit_gb": float(prompt("Storage Limit (GB)", "100"))
+        }
         
-        config[f"{prefix}ENDPOINT"] = endpoint
-        config[f"{prefix}REGION"] = prompt("Region Code", "us-east-1")
-        config[f"{prefix}ACCESS_KEY"] = prompt("Access Key ID", "")
-        config[f"{prefix}SECRET_KEY"] = prompt("Secret Access Key", "")
-        config[f"{prefix}BUCKET"] = prompt("Bucket Name", "wordpress-backups")
-        config[f"{prefix}STORAGE_LIMIT_GB"] = prompt("Storage Limit (GB)", "100")
-        
-        server_num += 1
+        storage_list.append(server)
+        json_config["storage"] = storage_list
+        save_config(json_config)  # Save incrementally
         
         add_more = input("\nAdd another S3 server? [y/N]: ").strip().lower()
         if add_more != 'y':
             break
     
-    return config
+    return json_config
 
 
 def configure_email(config):
@@ -196,23 +204,35 @@ def validate_remote_config():
     warnings = []
     errors = []
     
-    config = load_env()
-    sites = load_sites()
+    env_config = load_env()
+    json_config = load_config()
+    
+    sites = json_config.get("sites", [])
+    storage = json_config.get("storage", [])
     
     # CRITICAL: Must have at least one site
     if not sites:
-        errors.append("No WordPress sites configured. Run site detection first.")
+        errors.append("No WordPress sites configured in config.json. Run site detection first.")
     
     # WARNING: No S3 storage
-    if not config.get("S3_SERVER_1_ENDPOINT"):
+    if not storage:
         warnings.append("No S3 storage configured. Backups will be LOCAL ONLY.")
+    else:
+        # Check if at least one looks valid
+        valid_storage = False
+        for s in storage:
+            if s.get("endpoint") and s.get("bucket"):
+                valid_storage = True
+                break
+        if not valid_storage:
+             warnings.append("S3 storage configured but missing endpoint/bucket.")
     
     # WARNING: No email
-    if not config.get("SMTP_SERVER"):
+    if not env_config.get("SMTP_SERVER"):
         warnings.append("No SMTP configured. No email notifications.")
     
     # INFO: No D1
-    if not config.get("CLOUDFLARE_ACCOUNT_ID"):
+    if not env_config.get("CLOUDFLARE_ACCOUNT_ID"):
         warnings.append("No Cloudflare D1 configured. Logs stored locally only.")
     
     return len(errors) == 0, warnings, errors
@@ -337,17 +357,21 @@ def run_local_wizard():
     print("  WordPress Backup - Local Setup")
     print("="*50)
     
-    config = load_env()
+    env_config = load_env()
+    json_config = load_config()
     first_run = not os.path.exists(ENV_PATH)
     
     # Deployment is REQUIRED on first run
-    if first_run or not config.get("REMOTE_HOST"):
-        config = configure_deployment(config)
-        save_env(config)
+    if first_run or not env_config.get("REMOTE_HOST"):
+        env_config = configure_deployment(env_config)
+        save_env(env_config)
     
-    # Optional sections
+    # Config Sections
+    if prompt_section("S3 Storage") == 'y':
+        json_config = configure_s3(json_config)
+        save_config(json_config)
+
     sections = [
-        ("S3 Storage", configure_s3),
         ("SMTP Email", configure_email),
         ("Cloudflare D1", configure_cloudflare),
         ("Backup Settings", configure_backup),
@@ -358,8 +382,8 @@ def run_local_wizard():
         if choice == 's':
             break  # Skip to deploy
         elif choice == 'y':
-            config = func(config)
-            save_env(config)
+            env_config = func(env_config)
+            save_env(env_config)
     
     # Deploy?
     deploy = input("\nDeploy now? [Y/n]: ").strip().lower()
@@ -375,25 +399,27 @@ def run_remote_wizard():
     print("  WordPress Backup - Server Setup")
     print("="*50)
     
-    config = load_env()
-    config = ensure_server_id(config)
-    save_env(config)
+    env_config = load_env()
+    env_config = ensure_server_id(env_config)
+    save_env(env_config)
+    
+    json_config = load_config()
+    existing_sites = json_config.get("sites", [])
     
     # Auto-detect WordPress sites
     print("\n[*] Scanning for WordPress sites...")
     detected = detect_wordpress_sites()
     
-    sites = load_sites()  # Load any existing sites
-    
     if detected:
         selected = prompt_select_sites(detected)
         if selected:
             # Merge with existing, avoid duplicates by name
-            existing_names = {s['name'] for s in sites}
+            existing_names = {s['name'] for s in existing_sites}
             for s in selected:
                 if s['name'] not in existing_names:
-                    sites.append(s)
-            save_sites(sites)
+                    existing_sites.append(s)
+            json_config["sites"] = existing_sites
+            save_config(json_config)
     else:
         print("[!] No WordPress sites detected automatically.")
     
@@ -405,8 +431,9 @@ def run_remote_wizard():
         
         new_site = manual_add_site()
         if new_site:
-            sites.append(new_site)
-            save_sites(sites)
+            existing_sites.append(new_site)
+            json_config["sites"] = existing_sites
+            save_config(json_config)
     
     # Validate
     if not run_validation():
@@ -414,7 +441,7 @@ def run_remote_wizard():
         sys.exit(1)
     
     # Generate systemd
-    generate_systemd(config)
+    generate_systemd(env_config)
     
     print("\n[+] Server setup complete!")
     print("    Install systemd services with:")
@@ -492,7 +519,6 @@ def manual_add_site():
 def main():
     parser = argparse.ArgumentParser(description="WordPress Backup Configuration")
     parser.add_argument("--systemd", action="store_true", help="Generate systemd files only")
-    parser.add_argument("--sites", action="store_true", help="Manage sites manually")
     parser.add_argument("--detect", action="store_true", help="Auto-detect WordPress sites")
     parser.add_argument("--validate", action="store_true", help="Validate configuration")
     
@@ -500,27 +526,24 @@ def main():
     
     # Special modes
     if args.systemd:
-        config = load_env()
-        generate_systemd(config)
+        env_config = load_env()
+        generate_systemd(env_config)
         return
     
     if args.detect:
-        sites = detect_wordpress_sites()
-        if sites:
-            selected = prompt_select_sites(sites)
+        json_config = load_config()
+        existing_sites = json_config.get("sites", [])
+        detected = detect_wordpress_sites()
+        if detected:
+            selected = prompt_select_sites(detected)
             if selected:
-                save_sites(selected)
+                json_config["sites"] = existing_sites + selected
+                save_config(json_config)
         return
     
     if args.validate:
         ok = run_validation()
         sys.exit(0 if ok else 1)
-    
-    if args.sites:
-        # Manual site management (existing flow)
-        from configure import manage_sites
-        manage_sites()
-        return
     
     # Auto-detect environment
     if is_remote_environment():

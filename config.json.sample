@@ -1,0 +1,37 @@
+{
+  "sites": [
+    {
+      "name": "example-site",
+      "wp_config_path": "/var/www/example.com/wp-config.php",
+      "wp_content_path": "/var/www/example.com/htdocs/wp-content",
+      "db_host": "",
+      "db_name": "",
+      "db_user": "",
+      "db_password": ""
+    }
+  ],
+  "storage": [
+    {
+      "name": "idrive-primary",
+      "type": "s3",
+      "endpoint": "t5k4.ldn.idrivee2-61.com",
+      "region": "eu-west-3",
+      "access_key": "",
+      "secret_key": "",
+      "bucket": "wordpress-backups",
+      "weight": 100,
+      "storage_limit_gb": 100
+    },
+    {
+      "name": "backup-storage",
+      "type": "s3",
+      "endpoint": "s3.amazonaws.com",
+      "region": "us-east-1",
+      "access_key": "",
+      "secret_key": "",
+      "bucket": "offsite-backups",
+      "weight": 50,
+      "storage_limit_gb": 500
+    }
+  ]
+}

@@ -1,102 +1,48 @@
-# Managing WordPress Sites
+# Managing Sites
 
-The backup system supports **unlimited WordPress sites** managed via `sites.json`.
+All WordPress sites are configured in `config.json`.
 
-## Adding Sites
+## Configuration Format
 
-### Interactive Method
-
-```bash
-./configure.sh --sites
-```
-
-Select **"A. Add New Site"** and provide:
-
-| Field | Description | Example |
-|-------|-------------|---------|
-| Site Name | Unique identifier | `zimpricecheck` |
-| wp-config.php path | Full path to config file | `/var/www/site.com/wp-config.php` |
-| wp-content path | Full path to content dir | `/var/www/site.com/htdocs/wp-content` |
-| DB Host | Database host (optional) | `localhost` |
-| DB Name | Database name (optional) | Leave blank to auto-detect |
-| DB User | Database user (optional) | Leave blank to auto-detect |
-| DB Password | Database password (optional) | Leave blank to auto-detect |
-
-> **Note**: If database credentials are left blank, they will be automatically extracted from `wp-config.php`.
-
-### Manual Method
-
-Edit `sites.json` directly:
+Sites are defined in the `sites` array.
 
 ```json
 {
   "sites": [
     {
-      "name": "zimpricecheck",
-      "wp_config_path": "/var/www/zimpricecheck.com/wp-config.php",
-      "wp_content_path": "/var/www/zimpricecheck.com/htdocs/wp-content",
-      "db_host": "",
-      "db_name": "",
-      "db_user": "",
-      "db_password": ""
-    },
-    {
-      "name": "another-site",
-      "wp_config_path": "/var/www/another.com/wp-config.php",
-      "wp_content_path": "/var/www/another.com/htdocs/wp-content",
+      "name": "example-site",
+      "wp_config_path": "/var/www/example.com/wp-config.php",
+      "wp_content_path": "/var/www/example.com/htdocs/wp-content",
       "db_host": "localhost",
-      "db_name": "another_db",
-      "db_user": "dbuser",
-      "db_password": "dbpass"
+      "db_name": "example_db",
+      "db_user": "db_user",
+      "db_password": "secret_password"
     }
   ]
 }
 ```
 
-## Removing Sites
+### Auto-Detection
+
+The system can automatically detect sites in `/var/www/` and populate `config.json`.
+
+```bash
+# Run wizard to detect
+./configure.sh --detect
+```
+
+### Manual Configuration
+
+You can also edit `config.json` manually or use the wizard:
 
 ```bash
 ./configure.sh --sites
 ```
 
-Select **"R. Remove Site"** and enter the site number.
+### Database Credentials
 
-## Site Name Convention
+If `db_name`, `db_user`, and `db_password` are left empty (or set to `""`), the system will verify it can extract them from `wp-config.php` automatically. This is the recommended and most secure method.
 
-The site name is used for:
-
-1. **Archive naming**: `{site_name}-backup-{timestamp}.tar.zst`
-2. **Database tracking**: `site_name` column in logs
-3. **Log messages**: `[site_name] [STATUS] message`
-
-Choose descriptive, URL-safe names (lowercase, hyphens allowed).
-
-## Listing Sites
-
-View currently configured sites:
-
-```bash
-./configure.sh --sites
-```
-
-Output:
-```
---- Manage WordPress Sites (2 configured) ---
- 1. zimpricecheck (/var/www/zimpricecheck.com/wp-config.php)
- 2. another-site (/var/www/another.com/wp-config.php)
-```
-
-## Migration from Single-Site
-
-If you have an existing `.env` with `WP_CONFIG_PATH` (legacy single-site format), running `./configure.sh` will automatically:
-
-1. Create `sites.json`
-2. Add a "default" site using the legacy paths
-3. Display a migration notice
-
-## File Location
-
-- **Local development**: `./sites.json`
-- **Remote server**: `/opt/wordpress-backup/sites.json`
-
-> **Security**: `sites.json` is in `.gitignore` — credentials are never committed.
+Only fill these fields if:
+- Your `wp-config.php` uses complex logic/variables for DB credentials that regex cannot parse.
+- You are using an external database not defined in `wp-config.php`.

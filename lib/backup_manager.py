@@ -2,7 +2,7 @@
 """
 WordPress Backup Manager (Multi-Site Edition)
 
-Backs up multiple WordPress sites configuration in sites.json.
+Backs up multiple WordPress sites from config.json.
 - Iterates through defined sites.
 - Backs up DB, wp-config, wp-content.
 - Uploads to S3-compatible storage.
@@ -28,7 +28,7 @@ from s3_manager import S3Manager, upload_to_s3
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
-SITES_PATH = os.path.join(BASE_DIR, "sites.json")
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 DB_FILE = os.path.join(BASE_DIR, "backups.db")
 
 load_dotenv(ENV_PATH)
@@ -91,6 +91,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS s3_archives
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   filename TEXT NOT NULL,
+                  storage_name TEXT NOT NULL,
                   s3_endpoint TEXT NOT NULL,
                   s3_bucket TEXT NOT NULL,
                   file_size INTEGER,
@@ -126,6 +127,25 @@ def human_readable_size(size_bytes):
         if size_bytes < 1024.0: return f"{size_bytes:.2f} {unit}"
         size_bytes /= 1024.0
     return f"{size_bytes:.2f} PB"
+
+# --- Config Loading ---
+
+def load_config() -> dict:
+    """Load the unified configuration file."""
+    if not os.path.exists(CONFIG_PATH):
+        return {"sites": [], "storage": []}
+    
+    try:
+        with open(CONFIG_PATH, 'r') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"Error loading config.json: {e}")
+        return {"sites": [], "storage": []}
+
+def get_sites() -> list:
+    """Get sites from config.json."""
+    config = load_config()
+    return config.get("sites", [])
 
 # --- Backup Logic ---
 
@@ -200,16 +220,14 @@ def main():
     d1 = D1Manager()
     if d1.enabled: d1.verify_remote_tables()
 
-    # Load Sites
-    if not os.path.exists(SITES_PATH):
-        print("No sites.json found.")
+    # Load Sites from config.json
+    sites = get_sites()
+    
+    if not sites:
+        print("No sites configured in config.json.")
         tracker.finish()
         return
 
-    with open(SITES_PATH, 'r') as f:
-        data = json.load(f)
-        sites = data.get("sites", [])
-    
     for site in sites:
         backup_site(site)
     
