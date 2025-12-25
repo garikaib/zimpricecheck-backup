@@ -1,4 +1,5 @@
 from typing import Generator
+import logging
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
@@ -8,6 +9,9 @@ from master.core import security
 from master.db.session import SessionLocal
 from master.db import models
 from master import schemas
+
+# Setup logging for debugging auth issues
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -24,23 +28,60 @@ def get_current_user(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme)
 ) -> models.User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    logger.info(f"[AUTH] Token validation starting...")
+    logger.info(f"[AUTH] Token (first 50 chars): {token[:50] if len(token) > 50 else token}...")
+    logger.info(f"[AUTH] Using SECRET_KEY (first 10 chars): {settings.SECRET_KEY[:10]}...")
+    logger.info(f"[AUTH] Using ALGORITHM: {settings.ALGORITHM}")
+    
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        logger.info(f"[AUTH] Token decoded successfully!")
+        logger.info(f"[AUTH] Payload: {payload}")
+        
         email: str = payload.get("sub")
         if email is None:
-            raise credentials_exception
+            logger.error("[AUTH] Token missing 'sub' claim!")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token: missing 'sub' claim",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
         token_data = schemas.TokenData(email=email)
-    except JWTError:
-        raise credentials_exception
+        logger.info(f"[AUTH] Looking up user with email: {email}")
+        
+    except jwt.ExpiredSignatureError:
+        logger.error("[AUTH] Token has expired!")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.JWTClaimsError as e:
+        logger.error(f"[AUTH] JWT claims error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token claims: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except JWTError as e:
+        logger.error(f"[AUTH] JWT decode error: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Could not validate credentials: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
     user = db.query(models.User).filter(models.User.email == token_data.email).first()
     if user is None:
-        raise credentials_exception
+        logger.error(f"[AUTH] User not found in database: {token_data.email}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    logger.info(f"[AUTH] User authenticated successfully: {user.email} (role: {user.role})")
     return user
 
 def get_current_active_user(
