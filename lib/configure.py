@@ -68,44 +68,70 @@ def add_admin_interactive():
         
         print("Options:")
         print("  1. Add New Admin")
-        print("  2. Exit")
+        print("  2. Edit Existing Admin")
+        print("  3. Exit")
         
-        choice = input("\nChoice [1/2]: ").strip()
+        choice = input("\nChoice [1-3]: ").strip()
         
-        if choice == '2':
+        if choice == '3':
             break
         
+        db = SessionLocal()
+        
         if choice == '1':
+            print("\n--- Add New Admin ---")
             email = input("Email: ").strip()
-            if not email: continue
+            if not email: 
+                db.close()
+                continue
             
+            # Check exist first
+            if db.query(models.User).filter(models.User.email == email).first():
+                print(f"[!] User {email} already exists. Use Option 2 to edit.")
+                db.close()
+                continue
+                
             password = input("Password: ").strip()
             full_name = input("Full Name [Admin]: ").strip() or "Admin"
             
-            db = SessionLocal()
+            user = models.User(
+                email=email,
+                hashed_password=get_password_hash(password),
+                full_name=full_name,
+                role=models.UserRole.SUPER_ADMIN,
+                is_active=True
+            )
+            db.add(user)
+            db.commit()
+            print(f"[+] User created successfully!")
+            
+        elif choice == '2':
+            print("\n--- Edit Existing Admin ---")
+            email = input("Email to edit: ").strip()
+            if not email:
+                db.close()
+                continue
+                
             user = db.query(models.User).filter(models.User.email == email).first()
+            if not user:
+                print(f"[!] User {email} not found.")
+                db.close()
+                continue
             
-            if user:
-                print(f"[!] User {email} already exists.")
-                update = input("Update password? [y/N]: ").strip().lower()
-                if update == 'y':
-                    user.hashed_password = get_password_hash(password)
-                    user.full_name = full_name
-                    db.commit()
-                    print(f"[+] User updated!")
-            else:
-                user = models.User(
-                    email=email,
-                    hashed_password=get_password_hash(password),
-                    full_name=full_name,
-                    role=models.UserRole.SUPER_ADMIN,
-                    is_active=True
-                )
-                db.add(user)
-                db.commit()
-                print(f"[+] User created!")
+            print(f"Editing: {user.email} ({user.full_name})")
             
-            db.close()
+            new_pass = input("New Password (leave empty to keep current): ").strip()
+            new_name = input(f"New Name [{user.full_name}]: ").strip()
+            
+            if new_pass:
+                user.hashed_password = get_password_hash(new_pass)
+            if new_name:
+                user.full_name = new_name
+            
+            db.commit()
+            print(f"[+] User updated successfully!")
+            
+        db.close()
 
 
 def prompt(label, default=None, required=True):

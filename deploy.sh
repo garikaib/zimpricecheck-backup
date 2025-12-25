@@ -134,7 +134,7 @@ PYTHONPATH=. ./venv/bin/python3 master/init_db.py
 
 echo "[*] Verifying Super Admins..."
 ./venv/bin/python3 lib/configure.py --add-admin <<EOF
-2
+3
 EOF
 # Note: The above runs add-admin interactively but instantly exits (Option 2) to trigger the list_admins() print.
 
