@@ -81,17 +81,13 @@ echo "[*] Installing Python dependencies..."
 echo "[*] Setting permissions..."
 chmod +x run.sh configure.sh lib/*.py 2>/dev/null || true
 
+echo "[*] Resetting logs database (fresh start)..."
+rm -f backups.db
+echo "[+] Logs cleared."
+
 echo "[*] Running remote configuration wizard..."
 # This will auto-detect WordPress sites and generate systemd files
 ./venv/bin/python3 lib/configure.py
-
-echo "[*] Installing MEGAcmd if not present..."
-if ! command -v mega-login &> /dev/null; then
-    wget -q https://mega.nz/linux/repo/xUbuntu_22.04/amd64/megacmd-xUbuntu_22.04_amd64.deb -O /tmp/megacmd.deb
-    sudo apt-get update -qq
-    sudo apt-get install -y /tmp/megacmd.deb
-    rm -f /tmp/megacmd.deb
-fi
 
 echo "[*] Installing systemd services..."
 if [ -d "systemd" ]; then

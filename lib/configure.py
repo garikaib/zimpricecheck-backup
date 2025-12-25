@@ -107,11 +107,45 @@ def configure_deployment(config):
     return config
 
 
-def configure_mega(config):
-    print("\n--- Mega.nz Storage ---")
-    config["MEGA_EMAIL_1"] = prompt("Mega Email", get_def(config, "MEGA_EMAIL_1", ""), required=False)
-    config["MEGA_PASSWORD_1"] = prompt("Mega Password", get_def(config, "MEGA_PASSWORD_1", ""), required=False)
-    config["MEGA_STORAGE_LIMIT_GB"] = prompt("Storage Limit (GB)", get_def(config, "MEGA_STORAGE_LIMIT_GB", "19.5"))
+def configure_s3(config):
+    """Configure S3-compatible storage servers."""
+    print("\n--- S3 Storage ---")
+    print("Configure S3-compatible storage (AWS S3, iDrive E2, Backblaze B2, etc.)")
+    print("You can add multiple servers. Leave endpoint blank to stop adding.\n")
+    
+    server_num = 1
+    
+    # Find existing servers
+    while config.get(f"S3_SERVER_{server_num}_ENDPOINT"):
+        server_num += 1
+    
+    if server_num > 1:
+        print(f"[*] {server_num - 1} S3 server(s) already configured.")
+        modify = input("Add more servers? [y/N]: ").strip().lower()
+        if modify != 'y':
+            return config
+    
+    while True:
+        print(f"\n--- S3 Server {server_num} ---")
+        prefix = f"S3_SERVER_{server_num}_"
+        
+        endpoint = prompt("S3 Endpoint (e.g., s3.amazonaws.com)", "", required=False)
+        if not endpoint:
+            break
+        
+        config[f"{prefix}ENDPOINT"] = endpoint
+        config[f"{prefix}REGION"] = prompt("Region Code", "us-east-1")
+        config[f"{prefix}ACCESS_KEY"] = prompt("Access Key ID", "")
+        config[f"{prefix}SECRET_KEY"] = prompt("Secret Access Key", "")
+        config[f"{prefix}BUCKET"] = prompt("Bucket Name", "wordpress-backups")
+        config[f"{prefix}STORAGE_LIMIT_GB"] = prompt("Storage Limit (GB)", "100")
+        
+        server_num += 1
+        
+        add_more = input("\nAdd another S3 server? [y/N]: ").strip().lower()
+        if add_more != 'y':
+            break
+    
     return config
 
 
@@ -139,7 +173,7 @@ def configure_backup(config):
     config["BACKUP_FREQUENCY"] = prompt("Frequency (daily/twice/every-6h/every-2h)", get_def(config, "BACKUP_FREQUENCY", "daily"))
     config["BACKUP_TIME"] = prompt("Time (HH:MM)", get_def(config, "BACKUP_TIME", "00:00"))
     config["RETENTION_LOCAL_DAYS"] = prompt("Local Retention (days)", get_def(config, "RETENTION_LOCAL_DAYS", "2"))
-    config["RETENTION_MEGA_DAYS"] = prompt("Mega Retention (days)", get_def(config, "RETENTION_MEGA_DAYS", "7"))
+    config["RETENTION_S3_DAYS"] = prompt("S3 Retention (days)", get_def(config, "RETENTION_S3_DAYS", "7"))
     return config
 
 
@@ -169,9 +203,9 @@ def validate_remote_config():
     if not sites:
         errors.append("No WordPress sites configured. Run site detection first.")
     
-    # WARNING: No Mega storage
-    if not config.get("MEGA_EMAIL_1"):
-        warnings.append("No Mega.nz configured. Backups will be LOCAL ONLY.")
+    # WARNING: No S3 storage
+    if not config.get("S3_SERVER_1_ENDPOINT"):
+        warnings.append("No S3 storage configured. Backups will be LOCAL ONLY.")
     
     # WARNING: No email
     if not config.get("SMTP_SERVER"):
@@ -313,7 +347,7 @@ def run_local_wizard():
     
     # Optional sections
     sections = [
-        ("Mega.nz Storage", configure_mega),
+        ("S3 Storage", configure_s3),
         ("SMTP Email", configure_email),
         ("Cloudflare D1", configure_cloudflare),
         ("Backup Settings", configure_backup),

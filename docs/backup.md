@@ -56,7 +56,7 @@ For each site in `sites.json`:
 2. **Config Backup** — Copies `wp-config.php`
 3. **Content Archive** — Tars `wp-content` (excludes cache)
 4. **Compression** — Creates `{site}-backup-{timestamp}.tar.zst`
-5. **Upload** — Sends to Mega.nz
+5. **Upload** — Sends to S3-compatible storage
 6. **Logging** — Records to local DB and D1
 
 ## Archive Contents
@@ -75,6 +75,16 @@ Each archive contains:
 Format: `{site_name}-backup-{YYYYMMDD}-{HHMMSS}.tar.zst`
 
 Example: `zimpricecheck-backup-20241225-053000.tar.zst`
+
+## S3 Storage Path
+
+Archives are stored in S3 with the structure:
+
+```
+/{SERVER_ID}/{Year}/{Month}/{Day}/{filename}.tar.zst
+```
+
+Example: `/wp-server-1/2024/12/25/zimpricecheck-backup-20241225-053000.tar.zst`
 
 ## Excluded from wp-content
 
@@ -104,7 +114,8 @@ systemctl list-timers wordpress-backup.timer
 ## Restore Procedure
 
 ```bash
-# 1. Download or locate archive
+# 1. Download archive from S3 bucket or local backups/
+
 # 2. Extract
 mkdir restore && cd restore
 zstd -d {site}-backup-{timestamp}.tar.zst

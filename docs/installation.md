@@ -6,7 +6,6 @@
 - **Python 3.10+**
 - **MariaDB/MySQL** client tools (`mysqldump`)
 - **zstd** compression utility
-- **MEGAcmd** CLI tools (auto-installed by deploy script)
 
 ## Local Setup
 
@@ -33,7 +32,7 @@ pip install -r requirements.txt
 
 This launches an interactive menu to configure:
 - WordPress sites
-- Mega.nz credentials
+- S3 storage credentials
 - SMTP email settings
 - Cloudflare D1 sync
 - Deployment target
@@ -49,18 +48,9 @@ This launches an interactive menu to configure:
 The deploy script will automatically:
 - Create `/opt/wordpress-backup` directory
 - Set up Python virtual environment
-- Install dependencies
-- Install MEGAcmd if missing
+- Install dependencies (including `boto3` for S3)
+- Reset logs database for fresh start
 - Configure systemd timers
-
-### Manual MEGAcmd Installation
-
-If the automatic installation fails:
-
-```bash
-wget https://mega.nz/linux/repo/xUbuntu_22.04/amd64/megacmd-xUbuntu_22.04_amd64.deb
-sudo apt install ./megacmd-xUbuntu_22.04_amd64.deb
-```
 
 ## First Run
 
@@ -86,3 +76,6 @@ git pull
 ```
 
 The deploy script preserves your `.env` and `sites.json` configurations.
+
+> [!NOTE]
+> Each deployment resets the `backups.db` log database. Historical data in Cloudflare D1 is preserved.

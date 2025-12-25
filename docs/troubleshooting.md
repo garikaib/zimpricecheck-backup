@@ -56,23 +56,22 @@ mysqldump --host=localhost --user=USER --password=PASS DATABASE > /dev/null
 
 ---
 
-### Mega Upload Failed
+### S3 Upload Failed
 
 **Symptom**: Backup created but not uploaded.
 
 **Check**:
 ```bash
-# Test Mega login
-mega-login your@email.com password
-mega-df  # Check storage
-mega-logout
+# Test S3 connectivity
+./venv/bin/python3 lib/s3_manager.py
 ```
 
 **Solutions**:
-- Verify credentials in `.env`
-- Check storage space (`mega-df`)
-- Ensure MEGAcmd installed: `which mega-login`
-- Try reinstalling: `sudo apt install --reinstall megacmd`
+- Verify S3 credentials in `.env` (`S3_SERVER_1_*` variables)
+- Check endpoint URL is correct (no `https://` prefix)
+- Ensure bucket exists or will be auto-created
+- Verify network allows outbound HTTPS (port 443)
+- Check storage limit: increase `S3_SERVER_1_STORAGE_LIMIT_GB`
 
 ---
 

@@ -1,6 +1,6 @@
 # WordPress Backup System
 
-**Multi-Site SaaS Edition** — Automated backup for multiple WordPress sites with Mega.nz storage and Cloudflare D1 synchronization.
+**Multi-Site SaaS Edition** — Automated backup for multiple WordPress sites with S3-compatible storage and Cloudflare D1 synchronization.
 
 ## Quick Start
 
@@ -20,6 +20,7 @@ cd wordpress-backup
 | [Managing Sites](docs/sites.md) | Multi-site setup with `sites.json` |
 | [Deployment](docs/deployment.md) | Remote server deployment with `deploy.sh` |
 | [Backup Operations](docs/backup.md) | Running backups, `run.sh` options |
+| [S3 Storage](docs/s3-storage.md) | Unlimited S3 servers, provider setup |
 | [Cloudflare D1](docs/cloudflare-d1.md) | D1 sync, batching, schema |
 | [Architecture](docs/architecture.md) | File structure, database schema |
 | [Troubleshooting](docs/troubleshooting.md) | Common issues and solutions |
@@ -30,7 +31,7 @@ cd wordpress-backup
 - **Auto-Detection**: Automatically discovers WordPress sites in `/var/www/`
 - **Remote-First**: Configure locally, sites detected on server during deploy
 - **Server Isolation**: Each server uses unique `SERVER_ID` for storage/logs
-- **Mega.nz Storage**: Up to 3 accounts with smart rotation per server
+- **Unlimited S3 Storage**: Support for unlimited S3-compatible servers (iDrive E2, AWS S3, Backblaze B2, etc.)
 - **Cloudflare D1**: Free-tier optimized sync (batched, server-isolated)
 - **Systemd Integration**: Automatic scheduling with timers
 - **Email Notifications**: Daily reports and failure alerts
@@ -39,32 +40,38 @@ cd wordpress-backup
 
 ### Local (Workstation)
 1. Set deployment target (host, user, port)
-2. Configure credentials (Mega, SMTP, D1) — each optional with Y/N/S
+2. Configure credentials (S3, SMTP, D1) — each optional with Y/N/S
 3. Deploy to server
 
 ### Remote (Server)
 1. Auto-detects WordPress sites
-2. Validates requirements (warns if Mega/SMTP missing)
+2. Validates requirements (warns if S3/SMTP missing)
 3. Sets `SERVER_ID` from hostname
 4. Generates systemd timers
 
 ## Server Isolation (Multi-Server)
 
-When multiple servers share Mega storage or D1:
+When multiple servers share S3 storage or D1:
 
-- **Storage**: Archives stored in `/{SERVER_ID}/Year/Month/`
+- **Storage**: Archives stored in `/{SERVER_ID}/Year/Month/Day/`
 - **Logs**: Only syncs records where `server_id` matches
 - **No conflicts**: Each server manages its own data
 
-## Migration (Existing Data)
+## S3 Storage
 
-For existing installations, run before deploying:
+Configure unlimited S3-compatible servers in `.env`:
 
-```bash
-./migrate.sh <SERVER_ID>
+```env
+S3_SERVER_1_ENDPOINT="t5k4.ldn.idrivee2-61.com"
+S3_SERVER_1_REGION="eu-west-3"
+S3_SERVER_1_ACCESS_KEY="your-key"
+S3_SERVER_1_SECRET_KEY="your-secret"
+S3_SERVER_1_BUCKET="wordpress-backups"
+
+# Add more with S3_SERVER_2_*, S3_SERVER_3_*, etc.
 ```
 
-This adds `server_id` to all records and reorganizes Mega storage. Self-deletes on success.
+See [S3 Storage docs](docs/s3-storage.md) for provider-specific setup.
 
 ## License
 

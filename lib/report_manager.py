@@ -5,7 +5,7 @@ WordPress Backup Report Manager
 Generates and sends daily backup summary reports including:
 - Files stored
 - File sizes (human-readable)
-- Mega account used for each backup
+- S3 storage endpoint used for each backup
 """
 
 import sqlite3
@@ -27,13 +27,6 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_SENDER_EMAIL = os.getenv("SMTP_SENDER_EMAIL", "business@zimpricecheck.com")
-
-# Mega accounts for display
-MEGA_ACCOUNTS = []
-for i in range(1, 4):
-    email = os.getenv(f"MEGA_EMAIL_{i}", "")
-    if email:
-        MEGA_ACCOUNTS.append(email)
 
 
 def human_readable_size(size_bytes):
@@ -87,8 +80,8 @@ def get_recent_archives():
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         query = """
-            SELECT filename, mega_account, file_size, upload_timestamp 
-            FROM mega_archives 
+            SELECT filename, s3_endpoint, s3_bucket, file_size, upload_timestamp 
+            FROM s3_archives 
             WHERE upload_timestamp >= datetime('now', '-1 day') 
             ORDER BY upload_timestamp DESC
         """
@@ -151,7 +144,7 @@ def main():
         .INFO { color: #7f8c8d; }
         .WARNING { color: #f39c12; font-weight: bold; }
         .size { font-weight: bold; color: #2980b9; }
-        .mega-account { font-family: monospace; background-color: #ecf0f1; padding: 2px 6px; border-radius: 3px; }
+        .s3-endpoint { font-family: monospace; background-color: #ecf0f1; padding: 2px 6px; border-radius: 3px; }
         .summary-box { background-color: #e8f6f3; border-left: 4px solid #1abc9c; padding: 15px; margin-bottom: 20px; }
     </style>
     </head>
@@ -162,12 +155,13 @@ def main():
     
     # Summary box
     if archives:
-        total_size = sum(a[2] or 0 for a in archives)
+        total_size = sum(a[3] or 0 for a in archives)
+        endpoints = set(f"{a[1]}/{a[2]}" for a in archives if a[1])
         html += f"""
         <div class="summary-box">
             <strong>Summary:</strong> {len(archives)} backup(s) created in the last 24 hours<br>
             <strong>Total Size:</strong> {human_readable_size(total_size)}<br>
-            <strong>Storage Account(s):</strong> {', '.join(set(a[1] for a in archives if a[1]))}
+            <strong>S3 Storage:</strong> {', '.join(endpoints) if endpoints else 'N/A'}
         </div>
         """
     
@@ -180,20 +174,21 @@ def main():
                 <th>Time</th>
                 <th>Archive File</th>
                 <th>Size</th>
-                <th>Mega Account</th>
+                <th>S3 Endpoint</th>
             </tr>
         """
         
         for archive in archives:
-            filename, mega_account, file_size, timestamp = archive
+            filename, s3_endpoint, s3_bucket, file_size, timestamp = archive
             local_ts = format_timestamp(timestamp)
             size_str = human_readable_size(file_size)
+            storage_display = f"{s3_endpoint}/{s3_bucket}" if s3_endpoint else "N/A"
             html += f"""
             <tr>
                 <td>{local_ts}</td>
                 <td>{filename}</td>
                 <td class="size">{size_str}</td>
-                <td><span class="mega-account">{mega_account or 'N/A'}</span></td>
+                <td><span class="s3-endpoint">{storage_display}</span></td>
             </tr>
             """
         

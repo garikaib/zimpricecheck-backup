@@ -38,11 +38,14 @@ REMOTE_DIR="/opt/wordpress-backup"
 1. **Bundles files** — Creates `bundle.tar.zst` (excludes `venv`, `.git`, `backups`)
 2. **Uploads** — Transfers bundle via SCP
 3. **Extracts** — Unpacks on remote server
-4. **Sets up Python** — Creates venv, installs dependencies
-5. **Generates systemd** — Runs `./configure.sh --systemd`
-6. **Installs MEGAcmd** — If not present
+4. **Sets up Python** — Creates venv, installs dependencies (including `boto3` for S3)
+5. **Resets logs** — Clears `backups.db` for a fresh start
+6. **Generates systemd** — Runs `./configure.sh --systemd`
 7. **Enables timers** — Configures automatic scheduling
 8. **Triggers D1 sync** — Pulls/pushes database records
+
+> [!IMPORTANT]  
+> **Log Reset**: Each deployment clears the local `backups.db` database. This is intentional to start fresh with S3 storage. Historical data in Cloudflare D1 remains intact.
 
 ### Output Example
 
@@ -57,6 +60,8 @@ REMOTE_DIR="/opt/wordpress-backup"
 [*] Extracting bundle...
 [*] Setting up Python virtual environment...
 [*] Installing Python dependencies...
+[*] Resetting logs database (fresh start)...
+[+] Logs cleared.
 [*] Generating Systemd configuration...
 [*] Installing systemd services...
 [*] Triggering D1 Sync...

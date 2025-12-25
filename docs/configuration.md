@@ -22,7 +22,7 @@ When run locally (development machine):
    - REMOTE_HOST, REMOTE_USER, REMOTE_PORT, REMOTE_DIR
 
 2. **Optional Sections** (Y/N/S for each):
-   - Mega.nz Storage
+   - S3 Storage
    - SMTP Email
    - Cloudflare D1
    - Backup Settings
@@ -49,7 +49,7 @@ When run on a server (after deployment):
    | Check | Level | Result |
    |-------|-------|--------|
    | Sites ≥ 1 | CRITICAL | Exit if none |
-   | Mega configured | WARNING | "Local backups only" |
+   | S3 configured | WARNING | "Local backups only" |
    | SMTP configured | WARNING | "No email alerts" |
    | D1 configured | INFO | "Local logs only" |
 
@@ -74,13 +74,13 @@ WordPress sites are searched in:
 
 ## Shared Storage (SERVER_ID)
 
-When multiple servers share the same Mega account:
+When multiple servers share the same S3 storage:
 
 ```
 SERVER_ID="server1"
 ```
 
-Archives are stored at: `/{SERVER_ID}/{Year}/{Month}/`
+Archives are stored at: `/{SERVER_ID}/{Year}/{Month}/{Day}/`
 
 This prevents filename conflicts and allows proper retention per-server.
 

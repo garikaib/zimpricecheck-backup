@@ -98,10 +98,11 @@ class D1Manager:
                 site_name TEXT,
                 server_id TEXT);""",
             
-            """CREATE TABLE IF NOT EXISTS mega_archives
+            """CREATE TABLE IF NOT EXISTS s3_archives
                (id INTEGER PRIMARY KEY,
                 filename TEXT,
-                mega_account TEXT,
+                s3_endpoint TEXT,
+                s3_bucket TEXT,
                 file_size INTEGER,
                 upload_timestamp DATETIME,
                 site_name TEXT,
@@ -119,8 +120,7 @@ class D1Manager:
             self.execute_remote(sql)
         
         # Migration: Add server_id column only if missing
-        # Check existing columns via PRAGMA (D1 supports this)
-        tables_to_migrate = ["backup_log", "mega_archives", "daily_emails"]
+        tables_to_migrate = ["backup_log", "s3_archives", "daily_emails"]
         for table in tables_to_migrate:
             # Check if server_id column exists
             res = self.execute_remote(f"PRAGMA table_info({table})")
@@ -235,7 +235,7 @@ class D1Manager:
         try:
             self.verify_remote_tables()
             self.sync_table("backup_log")
-            self.sync_table("mega_archives")
+            self.sync_table("s3_archives")
             self.sync_table("daily_emails")
             self.log("Sync complete.")
         except Exception as e:

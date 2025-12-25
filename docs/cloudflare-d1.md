@@ -77,19 +77,22 @@ CREATE TABLE backup_log (
     timestamp DATETIME,
     status TEXT,
     details TEXT,
-    site_name TEXT
+    site_name TEXT,
+    server_id TEXT
 );
 ```
 
-### `mega_archives`
+### `s3_archives`
 ```sql
-CREATE TABLE mega_archives (
+CREATE TABLE s3_archives (
     id INTEGER PRIMARY KEY,
     filename TEXT,
-    mega_account TEXT,
+    s3_endpoint TEXT,
+    s3_bucket TEXT,
     file_size INTEGER,
     upload_timestamp DATETIME,
-    site_name TEXT
+    site_name TEXT,
+    server_id TEXT
 );
 ```
 
@@ -99,13 +102,14 @@ CREATE TABLE daily_emails (
     id INTEGER PRIMARY KEY,
     date TEXT,
     email_sent INTEGER,
-    backup_count INTEGER
+    backup_count INTEGER,
+    server_id TEXT
 );
 ```
 
 ## Schema Migration
 
-When syncing, if `site_name` column is missing:
+When syncing, if `server_id` column is missing:
 - Local: `ALTER TABLE` is executed automatically
 - Remote: `ALTER TABLE` sent via API
 
