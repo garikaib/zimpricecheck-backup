@@ -9,7 +9,51 @@ Backs up multiple WordPress sites from config.json.
 - Syncs logs to D1 with site context.
 """
 
-import os
+import requests
+
+# ...
+
+def get_system_stats():
+    """Get basic system stats (CPU load %, Disk usage %)."""
+    try:
+        # Load Avg (1 min) / CPUs * 100
+        load1, _, _ = os.getloadavg()
+        cpu_count = os.cpu_count() or 1
+        cpu_usage = min(int((load1 / cpu_count) * 100), 100)
+        
+        # Disk Usage
+        total, used, free = shutil.disk_usage("/")
+        disk_usage = int((used / total) * 100)
+        
+        return cpu_usage, disk_usage
+    except:
+        return 0, 0
+
+def report_to_master(active_backups=0):
+    """Send heartbeat stats to Master Server."""
+    master_url = os.getenv("MASTER_URL")
+    api_key = os.getenv("NODE_API_KEY")
+    
+    if not (master_url and api_key):
+        return
+        
+    cpu, disk = get_system_stats()
+    
+    try:
+        requests.post(
+            f"{master_url}/api/v1/stats/",
+            json={
+                "cpu_usage": cpu,
+                "disk_usage": disk,
+                "active_backups": active_backups
+            },
+            headers={"X-API-KEY": api_key},
+            timeout=5
+        )
+    except Exception as e:
+        print(f"[!] Stats reporting failed: {e}")
+
+# ... existing code ...
 import sys
 import subprocess
 import datetime
@@ -305,7 +349,10 @@ def main():
 
     total_sites = len(sites)
     for idx, site in enumerate(sites, 1):
+        report_to_master(active_backups=total_sites - idx + 1)
         backup_site(site, idx, total_sites, tracker)
+    
+    report_to_master(active_backups=0)
     
     # Sync Logs
     if d1.enabled: d1.sync_all()

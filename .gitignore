@@ -10,3 +10,7 @@ wp-backup-work/
 .idea/
 .vscode/
 *.log
+config.json
+master.db
+master/venv/
+master/.env

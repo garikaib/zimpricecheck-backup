@@ -393,15 +393,51 @@ def run_local_wizard():
         os.execvp("./deploy.sh", ["./deploy.sh"])
 
 
-def run_remote_wizard():
-    """Remote environment wizard - detect sites, validate, generate systemd."""
     print("\n" + "="*50)
     print("  WordPress Backup - Server Setup")
     print("="*50)
     
     env_config = load_env()
-    env_config = ensure_server_id(env_config)
-    save_env(env_config)
+    
+    # Mode Selection (first run)
+    if not env_config.get("MASTER_URL"):
+        print("\nSelect Operation Mode:")
+        print("  1. Standalone (Local Config)")
+        print("  2. Managed Node (Connect to Master)")
+        mode = prompt("Mode [1/2]", "1")
+        
+        if mode == "2":
+            # Enrollment Flow
+            print("\n--- Enroll with Master ---")
+            master_url = prompt("Master Server URL", "http://master.example.com")
+            
+            # Auto-detect hostname/ip
+            hostname = os.uname().nodename
+            
+            from master_client import request_join, poll_for_approval
+            
+            print(f"\n[*] Requesting access for '{hostname}'...")
+            request_id = request_join(master_url, hostname, "0.0.0.0")
+            
+            if request_id:
+                print("[*] Please approve this node in the Master Admin Dashboard.")
+                api_key = poll_for_approval(master_url, request_id)
+                
+                if api_key:
+                    env_config["MASTER_URL"] = master_url
+                    env_config["NODE_API_KEY"] = api_key
+                    env_config["SERVER_ID"] = hostname
+                    save_env(env_config)
+                    print("[+] Node enrolled and configured successfully!")
+                else:
+                    print("[!] Enrollment failed or timed out. Falling back to Standalone.")
+            else:
+                 print("[!] Failed to submit request. Falling back to Standalone.")
+    
+    # Ensure ID if standalone or failed enrollment
+    if not env_config.get("SERVER_ID"):
+        env_config = ensure_server_id(env_config)
+        save_env(env_config)
     
     json_config = load_config()
     existing_sites = json_config.get("sites", [])

@@ -1,100 +1,85 @@
 #!/bin/bash
 # Deployment Script (SaaS Ready)
-# Reads deployment target from .env
+# Usage: ./deploy.sh [node|master]
 
 set -e
 
+MODE="${1:-node}"
+
+if [[ "$MODE" != "node" && "$MODE" != "master" ]]; then
+    echo "Usage: ./deploy.sh [node|master]"
+    exit 1
+fi
+
 # Load configuration from .env
 if [ -f ".env" ]; then
-    # Parse .env safely (handles quotes)
     export $(grep -v '^#' .env | sed 's/"//g' | xargs)
 fi
 
-# Deployment Settings (with defaults)
+# Deployment Settings (Defaults)
 REMOTE_HOST="${REMOTE_HOST:-wp.zimpricecheck.com}"
 REMOTE_USER="${REMOTE_USER:-ubuntu}"
 REMOTE_PORT="${REMOTE_PORT:-22}"
-REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
 
-# Full SSH target
-SSH_TARGET="${REMOTE_USER}@${REMOTE_HOST}"
-
-# 0. Check Local Config
-if [ ! -f ".env" ]; then
-    echo "Configuration missing. Running setup wizard..."
-    ./configure.sh
-    if [ ! -f ".env" ]; then
-        echo "Setup aborted."
-        exit 1
-    fi
-    # Reload after configuration
-    export $(grep -v '^#' .env | sed 's/"//g' | xargs)
-    REMOTE_HOST="${REMOTE_HOST:-wp.zimpricecheck.com}"
-    REMOTE_USER="${REMOTE_USER:-ubuntu}"
-    REMOTE_PORT="${REMOTE_PORT:-22}"
+# Different defaults based on mode
+if [ "$MODE" == "master" ]; then
+    REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup-master}"
+else
     REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
-    SSH_TARGET="${REMOTE_USER}@${REMOTE_HOST}"
 fi
 
+SSH_TARGET="${REMOTE_USER}@${REMOTE_HOST}"
+
 echo "============================================="
-echo "  Deploying to ${SSH_TARGET}:${REMOTE_PORT}"
+echo "  Deploying [$MODE] to ${SSH_TARGET}:${REMOTE_PORT}"
 echo "  Remote Dir: ${REMOTE_DIR}"
 echo "============================================="
 
-# 1. Bundle Files with ZSTD
-echo "[*] Creating compressed bundle..."
+# Ensure ZSTD logic
 if ! command -v zstd &> /dev/null; then
     echo "Error: zstd is not installed. Run: sudo apt install zstd"
     exit 1
 fi
 
-# Create tarball (exclude venv, git, pycache, backups, db)
-if [ -f "config.json" ]; then
-    echo "[*] Including local config.json..."
-fi
+deploy_node() {
+    echo "[*] Creating NODE bundle..."
+    
+    # Bundle Agent Files
+    tar --exclude='./venv' \
+        --exclude='./.git' \
+        --exclude='./master' \
+        --exclude='./__pycache__' \
+        --exclude='./backups' \
+        --exclude='*.tar.zst' \
+        --exclude='*.pyc' \
+        --exclude='backups.db' \
+        -c . | zstd - > bundle.tar.zst
 
-tar --exclude='./venv' \
-    --exclude='./.git' \
-    --exclude='./__pycache__' \
-    --exclude='./backups' \
-    --exclude='*.tar.zst' \
-    --exclude='*.pyc' \
-    --exclude='backups.db' \
-    -c . | zstd - > bundle.tar.zst
-
-# 2. Generate remote setup script
-cat > remote_setup.sh << 'REMOTE_SCRIPT'
+    # Generate Node Setup Script
+    cat > remote_setup.sh << 'REMOTE_SCRIPT'
 #!/bin/bash
 set -e
-
 INSTALL_DIR="$1"
 REMOTE_USER="$2"
 
-echo "[*] Extracting bundle..."
+echo "[*] Extracting NODE bundle..."
 cd "$INSTALL_DIR"
 zstd -d -c bundle.tar.zst | tar -xf -
 
-echo "[*] Setting up Python virtual environment..."
-if [ ! -d "venv" ]; then
-    python3 -m venv venv
-fi
-
-echo "[*] Installing Python dependencies..."
+echo "[*] Setting up Python venv..."
+if [ ! -d "venv" ]; then python3 -m venv venv; fi
 ./venv/bin/pip install --upgrade pip -q
 ./venv/bin/pip install -r requirements.txt -q
 
-echo "[*] Setting permissions..."
 chmod +x run.sh configure.sh lib/*.py 2>/dev/null || true
 
-echo "[*] Resetting logs database (fresh start)..."
+echo "[*] Resetting logs database..."
 rm -f backups.db
-echo "[+] Logs cleared."
 
-echo "[*] Running remote configuration wizard..."
-# This will auto-detect WordPress sites and generate systemd files
-./venv/bin/python3 lib/configure.py
+echo "[*] Running configuration..."
+./venv/bin/python3 lib/configure.py --systemd
 
-echo "[*] Installing systemd services..."
+echo "[*] Installing services..."
 if [ -d "systemd" ]; then
     sudo cp systemd/*.service /etc/systemd/system/ 2>/dev/null || true
     sudo cp systemd/*.timer /etc/systemd/system/ 2>/dev/null || true
@@ -103,36 +88,92 @@ if [ -d "systemd" ]; then
     sudo systemctl start wordpress-backup.timer wordpress-report.timer 2>/dev/null || true
 fi
 
-echo "[*] Ensuring directories and permissions..."
-sudo mkdir -p "$INSTALL_DIR/backups"
-sudo mkdir -p /var/tmp/wp-backup-work
-
-# Clean up any stale lock files (may have wrong permissions from prior runs)
+sudo mkdir -p "$INSTALL_DIR/backups" /var/tmp/wp-backup-work
 sudo rm -f /var/tmp/wp-backup.pid /var/tmp/wp-backup.status
 
 echo "[*] Triggering D1 Sync..."
-# Run as REMOTE_USER to ensure DB schema is created with correct ownership
-sudo -u "$REMOTE_USER" ./venv/bin/python3 lib/d1_manager.py || echo "[!] D1 Sync skipped or failed."
+sudo -u "$REMOTE_USER" ./venv/bin/python3 lib/d1_manager.py || echo "[!] D1 Sync skipped."
 
-# Ensure final ownership for remote user (backups run as this user, not root)
-echo "[*] Fixing specific permissions..."
+echo "[*] Fixing permissions..."
 sudo chown -R "$REMOTE_USER":"$REMOTE_USER" /var/tmp/wp-backup-work "$INSTALL_DIR"
-
-echo ""
-echo "Timer Status:"
-systemctl status wordpress-backup.timer --no-pager || true
 REMOTE_SCRIPT
+}
+
+deploy_master() {
+    echo "[*] Creating MASTER bundle..."
+    
+    # Bundle Master Files
+    tar --exclude='./venv' \
+        --exclude='./.git' \
+        --exclude='./lib' \
+        --exclude='./docs' \
+        --exclude='./backups' \
+        --exclude='*.tar.zst' \
+        --exclude='*.pyc' \
+        --exclude='master.db' \
+        -c master .env | zstd - > bundle.tar.zst
+
+    # Generate Master Setup Script
+    cat > remote_setup.sh << 'REMOTE_SCRIPT'
+#!/bin/bash
+set -e
+INSTALL_DIR="$1"
+REMOTE_USER="$2"
+
+echo "[*] Extracting MASTER bundle..."
+cd "$INSTALL_DIR"
+zstd -d -c bundle.tar.zst | tar -xf -
+
+echo "[*] Setting up Master venv..."
+if [ ! -d "venv" ]; then python3 -m venv venv; fi
+./venv/bin/pip install --upgrade pip -q
+./venv/bin/pip install -r master/requirements.txt -q
+
+echo "[*] Initializing Database..."
+PYTHONPATH=. ./venv/bin/python3 master/init_db.py
+
+echo "[*] Creating Systemd Service..."
+cat > wordpress-master.service <<EOF
+[Unit]
+Description=WordPress Backup Master Server
+After=network.target
+
+[Service]
+User=$REMOTE_USER
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$INSTALL_DIR/venv/bin/uvicorn master.main:app --host 0.0.0.0 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo mv wordpress-master.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now wordpress-master.service
+
+echo "[*] Fixing permissions..."
+sudo chown -R "$REMOTE_USER":"$REMOTE_USER" "$INSTALL_DIR"
+
+echo "[+] Master Server deployed and running on port 8000!"
+REMOTE_SCRIPT
+}
+
+# Execute Mode
+if [ "$MODE" == "node" ]; then
+    deploy_node
+else
+    deploy_master
+fi
 
 chmod +x remote_setup.sh
 
-# 3. Upload
+# Upload & Run
 echo "[*] Uploading to ${SSH_TARGET}:${REMOTE_DIR}..."
 ssh -p ${REMOTE_PORT} -t ${SSH_TARGET} "sudo mkdir -p ${REMOTE_DIR} && sudo chown ${REMOTE_USER}:${REMOTE_USER} ${REMOTE_DIR}"
 scp -P ${REMOTE_PORT} bundle.tar.zst remote_setup.sh ${SSH_TARGET}:${REMOTE_DIR}/
 
-# 4. Remote Setup
-echo "[*] Running remote setup..."
-# Pass REMOTE_USER as argument to script
+echo "[*] Executing remote setup..."
 ssh -p ${REMOTE_PORT} -t ${SSH_TARGET} "cd ${REMOTE_DIR} && sudo bash remote_setup.sh ${REMOTE_DIR} ${REMOTE_USER}"
 
 # Cleanup
