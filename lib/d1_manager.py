@@ -56,14 +56,27 @@ class D1Manager:
 
         try:
             response = requests.post(self.base_url, headers=self.headers, json=payload, timeout=30)
-            response.raise_for_status()
             data = response.json()
+            
+            if not response.ok:
+                # Try to get detailed error from response
+                errors = data.get("errors", [])
+                if errors:
+                    error_msg = errors[0].get("message", str(response.status_code))
+                else:
+                    error_msg = f"HTTP {response.status_code}"
+                self.log(f"API Error: {error_msg}")
+                return None
             
             if not data.get("success"):
                 error_msg = "; ".join([e.get("message", "") for e in data.get("errors", [])])
-                raise Exception(f"D1 Error: {error_msg}")
+                self.log(f"D1 Error: {error_msg}")
+                return None
             
             return data["result"][0]
+        except requests.exceptions.RequestException as e:
+            self.log(f"Network error: {e}")
+            return None
         except Exception as e:
             self.log(f"Query failed: {e}")
             return None
