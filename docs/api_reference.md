@@ -867,6 +867,95 @@ Manually add a site by providing its filesystem path. The system verifies the pa
 
 ---
 
+## Backup History
+
+### List Site Backups
+**Endpoint**: `GET /sites/{site_id}/backups`
+**Auth**: Bearer Token (Node Admin+)
+**Query Params**: `skip`, `limit`
+
+**Response:**
+```json
+{
+  "backups": [
+    {
+      "id": 1,
+      "site_id": 5,
+      "site_name": "example.com",
+      "filename": "backup_2025-12-26.tar.zst",
+      "size_bytes": 52428800,
+      "size_gb": 0.049,
+      "s3_path": "s3://bucket/backups/site5/backup_2025-12-26.tar.zst",
+      "created_at": "2025-12-26T10:00:00Z",
+      "backup_type": "full",
+      "status": "SUCCESS",
+      "storage_provider": "S3 Prod"
+    }
+  ],
+  "total": 1
+}
+```
+
+### Get Backup Details
+**Endpoint**: `GET /backups/{backup_id}`
+**Auth**: Bearer Token (Node Admin+)
+
+**Response:**
+```json
+{
+  "id": 1,
+  "site_id": 5,
+  "site_name": "example.com",
+  "filename": "backup_2025-12-26.tar.zst",
+  "size_bytes": 52428800,
+  "size_gb": 0.049,
+  "s3_path": "s3://bucket/backups/site5/backup_2025-12-26.tar.zst",
+  "created_at": "2025-12-26T10:00:00Z",
+  "backup_type": "full",
+  "status": "SUCCESS",
+  "storage_provider": "S3 Prod",
+  "storage_provider_detail": {
+    "id": 1,
+    "name": "S3 Prod",
+    "type": "s3"
+  }
+}
+```
+
+### Delete Backup
+**Endpoint**: `DELETE /backups/{backup_id}`
+**Auth**: Bearer Token (Super Admin only)
+**Query Params**: `delete_remote` (bool, default: false)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Backup 'backup_2025-12-26.tar.zst' for site 'example.com' deleted",
+  "remote_deleted": false
+}
+```
+
+### Download Backup
+**Endpoint**: `GET /backups/{backup_id}/download`
+**Auth**: Bearer Token (Node Admin+)
+
+Generates a presigned download URL for the backup file.
+
+**Response:**
+```json
+{
+  "backup_id": 1,
+  "filename": "backup_2025-12-26.tar.zst",
+  "s3_path": "s3://bucket/backups/site5/backup_2025-12-26.tar.zst",
+  "provider": "S3 Prod",
+  "download_url": "https://s3.../presigned...",
+  "expires_in_seconds": 3600
+}
+```
+
+---
+
 ## Backup Control
 
 ### Start Backup

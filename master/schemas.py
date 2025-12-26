@@ -147,17 +147,31 @@ class SiteSimple(BaseModel):
         from_attributes = True
 
 # -- Backup Schemas --
+class StorageProviderSimple(BaseModel):
+    id: int
+    name: str
+    type: str
+    class Config:
+        from_attributes = True
+
 class BackupResponse(BaseModel):
     id: int
     site_id: int
     site_name: str
     filename: str
+    size_bytes: int
     size_gb: float
+    s3_path: Optional[str] = None
     created_at: datetime
     backup_type: str
     status: str
+    storage_provider: Optional[str] = None  # Provider name for list views
     class Config:
         from_attributes = True
+
+class BackupDetailResponse(BackupResponse):
+    """Extended backup response with full provider details."""
+    storage_provider_detail: Optional[StorageProviderSimple] = None
 
 class BackupListResponse(BaseModel):
     backups: List[BackupResponse]
