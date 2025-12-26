@@ -11,7 +11,8 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
-from daemon.scanner import scan_for_wordpress_sites, site_to_dict
+
+from daemon.scanner import scan_for_wordpress_sites, site_to_dict, verify_wordpress_site
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,14 @@ class BackupStartRequest(BaseModel):
     simulate: bool = False  # For testing without real backup
 
 
+
 class BackupStopRequest(BaseModel):
     force: bool = False
+
+
+class VerifySiteRequest(BaseModel):
+    path: str
+    wp_config_path: Optional[str] = None
 
 
 # ============== Scan Endpoints ==============
@@ -75,6 +82,20 @@ async def scan_sites(base_path: str = "/var/www"):
         _backup_state["status"] = "idle"
         _backup_state["error"] = str(e)
         logger.error(f"Scan failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/verify-site")
+async def verify_site_endpoint(request: VerifySiteRequest):
+    """
+    Verify a potential WordPress site path.
+    """
+    logger.info(f"Verifying site at {request.path}")
+    
+    try:
+        result = verify_wordpress_site(request.path, request.wp_config_path)
+        return result
+    except Exception as e:
+        logger.error(f"Verification failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

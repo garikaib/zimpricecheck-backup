@@ -84,6 +84,16 @@ class SiteCreate(SiteBase):
     node_id: int
     admin_id: Optional[int] = None
 
+class SiteManualCreate(BaseModel):
+    path: str
+    wp_config_path: Optional[str] = None
+    node_id: Optional[int] = None
+    name: Optional[str] = None  # Optional override
+
+class SiteVerifyRequest(BaseModel):
+    path: str
+    wp_config_path: Optional[str] = None
+
 # -- Stats Schemas --
 class NodeStatsBase(BaseModel):
     cpu_usage: int

@@ -1,4 +1,5 @@
-from typing import Any, List
+from typing import Any, List, Dict
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from master import schemas
@@ -249,6 +250,104 @@ async def get_site_backup_status(
             "error": site.backup_error,
             "started_at": site.backup_started_at.isoformat() if site.backup_started_at else None,
         }
+
+
+# ============== Site Manual Add ==============
+
+@router.post("/manual", response_model=Dict[str, Any])
+async def add_site_manually(
+    site_in: schemas.SiteManualCreate,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_superuser),
+):
+    """
+    Manually add a site by path. Verifies with daemon first.
+    """
+    # 1. Determine Node
+    node_id = site_in.node_id
+    if not node_id:
+        # Default to master node if not specified
+        # In a real multi-node setup, we'd need to know which node fs to check.
+        # For now, assuming Master/Local node for simplified manual add
+        # or defaulting to first node.
+        node = db.query(models.Node).first()
+        if node:
+            node_id = node.id
+        else:
+             raise HTTPException(status_code=400, detail="No nodes available")
+
+    # 2. Check existence
+    existing = db.query(models.Site).filter(models.Site.wp_path == site_in.path).first()
+    if existing:
+         raise HTTPException(status_code=400, detail=f"Site already exists with path {site_in.path}")
+
+    # 3. Call Daemon Verification
+    # We need to know which daemon to call.
+    # For this implementation, we assume local imports/daemon calls (Master acts as Node)
+    # or we'd need HTTP call to node agent.
+    # Given the project context (integrated daemon), we import directly.
+    
+    try:
+        from daemon.api import verify_site_endpoint, VerifySiteRequest
+        
+        verify_req = VerifySiteRequest(
+            path=site_in.path,
+            wp_config_path=site_in.wp_config_path
+        )
+        
+        # Directly calling the async function since we are in async context
+        # and likely in the same process/server for this "Master+Node" setup
+        # If separate, we'd use requests/httpx to call the node's API.
+        verify_result = await verify_site_endpoint(verify_req)
+        
+        if not verify_result.get("valid"):
+            error_msg = verify_result.get("error", "Verification failed")
+            if verify_result.get("needs_config_path"):
+                 raise HTTPException(status_code=422, detail={
+                     "message": error_msg,
+                     "code": "missing_config",
+                     "hint": "Please provide the full path to wp-config.php"
+                 })
+            
+            raise HTTPException(status_code=400, detail=f"Invalid site: {error_msg}")
+            
+        # 4. Create Site
+        details = verify_result.get("details", {})
+        
+        site_name = site_in.name or details.get("site_name") or Path(site_in.path).name
+        
+        site = models.Site(
+            name=site_name,
+            wp_path=site_in.path,
+            db_name=details.get("db_name"),
+            node_id=node_id,
+            status="active",
+            site_url=details.get("site_url"), # Assuming we add this field to model later or use it logic
+            backup_status="idle",
+        )
+        
+        db.add(site)
+        db.commit()
+        db.refresh(site)
+        
+        return {
+            "success": True,
+            "message": f"Site '{site.name}' added successfully",
+            "site": {
+                "id": site.id,
+                "name": site.name,
+                "url": details.get("site_url"),
+                "wp_path": site.wp_path,
+                "node_id": site.node_id
+            }
+        }
+        
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Daemon module not available")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============== Site Import from Scan ==============

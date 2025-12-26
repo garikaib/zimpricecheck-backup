@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
+import subprocess
+import shlex
 logger = logging.getLogger(__name__)
 
 
@@ -152,3 +154,153 @@ def site_to_dict(site: DiscoveredSite) -> Dict[str, Any]:
         "table_prefix": site.table_prefix,
         "is_complete": site.has_wp_config and site.has_wp_content,
     }
+
+def get_site_metadata(config: Dict[str, str]) -> Dict[str, str]:
+    """
+    Attempt to fetch site URL and name from the database.
+    """
+    metadata = {"url": None, "name": None}
+    
+    # We need at least db user and name
+    if not config.get("db_user") or not config.get("db_name"):
+        return metadata
+    
+    # Construct mysql command
+    # mysql -u user -ppassword -h host -D dbname -N -e "select option_value from wp_options where option_name in ('siteurl', 'blogname');"
+    
+    cmd = ["mysql"]
+    
+    # Add connection verification options
+    cmd.extend(["--connect-timeout=5", "--silent", "--skip-column-names"])
+    
+    if config.get("db_host"):
+        # Handle port if present (host:port)
+        host_parts = config["db_host"].split(":")
+        cmd.extend(["-h", host_parts[0]])
+        if len(host_parts) > 1:
+            cmd.extend(["-P", host_parts[1]])
+            
+    cmd.extend(["-u", config["db_user"]])
+    
+    if config.get("db_password"):
+        cmd.extend([f"-p{config['db_password']}"])
+        
+    cmd.extend(["-D", config["db_name"]])
+    
+    prefix = config.get("table_prefix", "wp_")
+    table = f"{prefix}options"
+    
+    query = f"SELECT option_name, option_value FROM {table} WHERE option_name IN ('siteurl', 'blogname')"
+    cmd.extend(["-e", query])
+    
+    try:
+        # Run command with timeout
+        result = subprocess.run(
+            cmd, 
+            capture_output=True, 
+            text=True, 
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                parts = line.split("\t")
+                if len(parts) >= 2:
+                    key, val = parts[0], parts[1]
+                    if key == "siteurl":
+                        metadata["url"] = val
+                    elif key == "blogname":
+                        metadata["name"] = val
+        else:
+            logger.warning(f"Metadata fetch failed: {result.stderr}")
+            
+    except Exception as e:
+        logger.warning(f"Error fetching metadata: {e}")
+        
+    return metadata
+
+def verify_wordpress_site(path: str, wp_config_path: str = None) -> Dict[str, Any]:
+    """
+    Verify if a path is a valid WordPress site and extract details.
+    
+    Args:
+        path: The document root of the site.
+        wp_config_path: Optional specific path to wp-config.php.
+        
+    Returns:
+        Dict with status and details.
+    """
+    path_obj = Path(path)
+    result = {
+        "valid": False,
+        "error": None,
+        "path": path,
+        "details": {}
+    }
+    
+    if not path_obj.exists():
+        result["error"] = "Directory does not exist"
+        return result
+        
+    if not path_obj.is_dir():
+        result["error"] = "Path is not a directory"
+        return result
+        
+    # 1. Check for wp-content
+    wp_content = path_obj / "wp-content"
+    if not wp_content.exists() or not wp_content.is_dir():
+        result["error"] = "Missing wp-content directory. Not a valid WordPress root?"
+        return result
+        
+    # 2. Check for wp-config.php
+    config_file = None
+    
+    if wp_config_path:
+        # User provided path
+        custom_conf = Path(wp_config_path)
+        if custom_conf.exists() and custom_conf.is_file():
+            config_file = custom_conf
+        else:
+            result["error"] = f"Provided wp-config.php not found at {wp_config_path}"
+            return result
+    else:
+        # Auto-discovery
+        # Check root
+        if (path_obj / "wp-config.php").exists():
+            config_file = path_obj / "wp-config.php"
+        # Check parent (valid WP security practice)
+        elif (path_obj.parent / "wp-config.php").exists():
+            config_file = path_obj.parent / "wp-config.php"
+            
+    if not config_file:
+        result["error"] = "wp-config.php not found. Please provide path explicitly."
+        result["needs_config_path"] = True
+        return result
+        
+    # 3. Parse config
+    try:
+        config = parse_wp_config(config_file)
+        if not config.get("db_name"):
+            result["error"] = "Could not parse DB credentials from wp-config.php"
+            return result
+            
+        result["details"] = {
+            "db_name": config.get("db_name"),
+            "db_user": config.get("db_user"),
+            "db_host": config.get("db_host"),
+            "table_prefix": config.get("table_prefix"),
+            "config_path": str(config_file)
+        }
+        
+        # 4. Fetch Metadata
+        metadata = get_site_metadata(config)
+        result["details"]["site_url"] = metadata.get("url")
+        result["details"]["site_name"] = metadata.get("name") or path_obj.name
+        
+        result["valid"] = True
+        
+    except Exception as e:
+        result["error"] = f"Error processing configuration: {e}"
+        
+    return result
+

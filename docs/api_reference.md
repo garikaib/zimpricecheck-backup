@@ -798,6 +798,51 @@ Scans for WordPress installations by looking for `wp-content/` and `wp-config.ph
   "sites": [
     {
       "name": "example.com",
+      "path": "/var/www/example.com",
+      "has_wp_config": true,
+      "has_wp_content": true,
+      "db_name": "wp_example",
+      "is_complete": true
+    }
+  ],
+  "total": 1
+}
+```
+
+### Manually Add Site
+**Endpoint**: `POST /sites/manual`
+**Auth**: Bearer Token (Super Admin only)
+
+Manually add a site by providing its filesystem path. The system verifies the path contains a valid WordPress installation (`wp-content`) and extracts metadata (DB name, Site Name, URL) from `wp-config.php` and the database.
+
+**Body:**
+```json
+{
+  "path": "/var/www/my-site",
+  "wp_config_path": "/var/www/wp-config.php",  // Optional
+  "node_id": 1,                                // Optional (defaults to master)
+  "name": "Custom Name"                        // Optional (auto-discovered if omitted)
+}
+```
+
+**Response (Success):**
+```json
+{
+  "success": true,
+  "message": "Site 'My Blog' added successfully",
+  "site": {
+    "id": 10,
+    "name": "My Blog",
+    "url": "https://myblog.com",
+    "wp_path": "/var/www/my-site",
+    "node_id": 1
+  }
+}
+```
+
+**Errors:**
+- `400 Bad Request`: Invalid site (missing `wp-content` or path does not exist).
+- `422 Unprocessable Entity`: `wp-config.php` not found (returns hint to provide explicit path).
       "path": "/var/www/example.com/htdocs",
       "has_wp_config": true,
       "has_wp_content": true,
