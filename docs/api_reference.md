@@ -192,6 +192,66 @@ Nodes do not log in. They include their API Key in the header of every request.
 
 > **Note:** Users cannot delete themselves.
 
+### Update Own Profile
+**Endpoint**: `PUT /users/me`
+**Auth**: Bearer Token (Any authenticated)
+
+Users can update their own profile (email, full_name, password) but cannot change their role.
+
+---
+
+## Activity Logs Endpoints
+
+All actions are automatically logged with IP address (Cloudflare-aware), user agent, and timestamp. Keeps last 100 logs per user.
+
+### Get My Logs
+**Endpoint**: `GET /activity-logs/me`
+**Auth**: Bearer Token (Any authenticated)
+
+**Response:**
+```json
+{
+  "logs": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "user_email": "admin@example.com",
+      "action": "login",
+      "target_type": null,
+      "target_id": null,
+      "target_name": null,
+      "details": "{\"role\": \"super_admin\"}",
+      "ip_address": "104.28.219.41",
+      "user_agent": "Mozilla/5.0 ...",
+      "created_at": "2025-12-26T01:58:12"
+    }
+  ],
+  "total": 1
+}
+```
+
+### List All Logs
+**Endpoint**: `GET /activity-logs/`
+**Auth**: Bearer Token (Super Admin)
+**Query Params**: `user_id`, `action`, `skip`, `limit`
+
+### Get User's Logs
+**Endpoint**: `GET /activity-logs/user/{user_id}`
+**Auth**: Bearer Token (Super Admin)
+
+### Logged Actions
+| Action | Description |
+|--------|-------------|
+| `login` | Successful login |
+| `login_failed` | Failed login attempt |
+| `user_create` | New user created |
+| `user_update` | User updated |
+| `user_delete` | User deleted |
+| `profile_update` | User updated own profile |
+| `node_approve` | Node approved |
+| `node_quota_update` | Node quota changed |
+| `backup_delete` | Backup deleted |
+
 ---
 
 ## Statistics Endpoints

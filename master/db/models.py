@@ -94,3 +94,32 @@ class NodeStats(Base):
     cpu_usage = Column(Integer) # Percentage
     disk_usage = Column(Integer) # Percentage
     active_backups = Column(Integer)
+
+
+class ActionType(str, enum.Enum):
+    LOGIN = "login"
+    LOGIN_FAILED = "login_failed"
+    USER_CREATE = "user_create"
+    USER_UPDATE = "user_update"
+    USER_DELETE = "user_delete"
+    PROFILE_UPDATE = "profile_update"
+    NODE_APPROVE = "node_approve"
+    NODE_QUOTA_UPDATE = "node_quota_update"
+    NODE_BLOCK = "node_block"
+    BACKUP_DELETE = "backup_delete"
+
+
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    user_email = Column(String, nullable=True)  # Store email for lookup even if user deleted
+    action = Column(Enum(ActionType), index=True)
+    target_type = Column(String, nullable=True)  # "user", "node", "backup", etc.
+    target_id = Column(Integer, nullable=True)
+    target_name = Column(String, nullable=True)  # Readable identifier
+    details = Column(String, nullable=True)  # JSON string for extra info
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)

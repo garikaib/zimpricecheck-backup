@@ -1,10 +1,11 @@
 from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from master import schemas
 from master.api import deps
 from master.db import models
 from master.core import security
+from master.core.activity_logger import log_action
 
 router = APIRouter()
 
@@ -42,6 +43,14 @@ def update_current_user(
     
     db.commit()
     db.refresh(current_user)
+    
+    # Log profile update
+    log_action(
+        action=models.ActionType.PROFILE_UPDATE,
+        user=current_user,
+        details={"fields_updated": list(update_data.keys())},
+    )
+    
     return current_user
 
 
@@ -114,6 +123,17 @@ def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+    
+    # Log user creation
+    log_action(
+        action=models.ActionType.USER_CREATE,
+        user=current_superuser,
+        target_type="user",
+        target_id=user.id,
+        target_name=user.email,
+        details={"role": str(user.role)},
+    )
+    
     return user
 
 
@@ -219,6 +239,18 @@ def delete_user(
     if user.id == current_superuser.id:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     
+    deleted_email = user.email
+    
     db.delete(user)
     db.commit()
+    
+    # Log user deletion
+    log_action(
+        action=models.ActionType.USER_DELETE,
+        user=current_superuser,
+        target_type="user",
+        target_id=user_id,
+        target_name=deleted_email,
+    )
+    
     return user

@@ -147,3 +147,23 @@ class BackupResponse(BaseModel):
 class BackupListResponse(BaseModel):
     backups: List[BackupResponse]
     total: int
+
+# -- Activity Log Schemas --
+class ActivityLogResponse(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    user_email: Optional[str] = None
+    action: str
+    target_type: Optional[str] = None
+    target_id: Optional[int] = None
+    target_name: Optional[str] = None
+    details: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class ActivityLogListResponse(BaseModel):
+    logs: List[ActivityLogResponse]
+    total: int

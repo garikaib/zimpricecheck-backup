@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Any
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
 from master import schemas
@@ -9,6 +9,7 @@ from master.api import deps
 from master.core import security
 from master.db import models
 from master.core.config import get_settings
+from master.core.activity_logger import log_action, get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ settings = get_settings()
 
 @router.post("/login", response_model=schemas.Token)
 def login_access_token(
+    request: Request,
     login_data: schemas.LoginRequest,
     db: Session = Depends(deps.get_db),
 ) -> Any:
@@ -24,15 +26,27 @@ def login_access_token(
     JSON token login, get an access token for future requests.
     """
     logger.info(f"[LOGIN] Login attempt for: {login_data.username}")
-    logger.info(f"[LOGIN] Using SECRET_KEY (first 10 chars): {settings.SECRET_KEY[:10]}...")
     
     user = db.query(models.User).filter(models.User.email == login_data.username).first()
     if not user or not security.verify_password(login_data.password, user.hashed_password):
         logger.warning(f"[LOGIN] Failed login attempt for: {login_data.username}")
+        # Log failed login attempt (non-blocking)
+        log_action(
+            action=models.ActionType.LOGIN_FAILED,
+            request=request,
+            user_email=login_data.username,
+            details={"reason": "invalid_credentials"},
+        )
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     
     if not user.is_active:
         logger.warning(f"[LOGIN] Inactive user attempted login: {login_data.username}")
+        log_action(
+            action=models.ActionType.LOGIN_FAILED,
+            request=request,
+            user=user,
+            details={"reason": "inactive_user"},
+        )
         raise HTTPException(status_code=400, detail="Inactive user")
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -42,10 +56,16 @@ def login_access_token(
     )
     
     logger.info(f"[LOGIN] Token created successfully for: {user.email} (role: {user.role})")
-    logger.info(f"[LOGIN] Token (first 50 chars): {access_token[:50]}...")
+    
+    # Log successful login (non-blocking)
+    log_action(
+        action=models.ActionType.LOGIN,
+        user=user,
+        request=request,
+        details={"role": str(user.role)},
+    )
     
     return {
         "access_token": access_token,
         "token_type": "bearer",
     }
-

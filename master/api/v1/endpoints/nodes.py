@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from master import schemas
 from master.api import deps
 from master.db import models
+from master.core.activity_logger import log_action
 import secrets
 import uuid
 
@@ -93,6 +94,16 @@ def approve_node(
     node.admin_id = current_superuser.id # Assign to approver for now
     db.commit()
     db.refresh(node)
+    
+    # Log node approval
+    log_action(
+        action=models.ActionType.NODE_APPROVE,
+        user=current_superuser,
+        target_type="node",
+        target_id=node.id,
+        target_name=node.hostname,
+    )
+    
     return node
 
 @router.get("/", response_model=List[schemas.NodeResponse])
@@ -185,9 +196,21 @@ def update_node_quota(
             detail=f"Quota cannot exceed total available ({node.total_available_gb} GB)"
         )
     
+    old_quota = node.storage_quota_gb
     node.storage_quota_gb = quota_in.storage_quota_gb
     db.commit()
     db.refresh(node)
+    
+    # Log quota update
+    log_action(
+        action=models.ActionType.NODE_QUOTA_UPDATE,
+        user=current_superuser,
+        target_type="node",
+        target_id=node.id,
+        target_name=node.hostname,
+        details={"old_quota": old_quota, "new_quota": quota_in.storage_quota_gb},
+    )
+    
     return node
 
 
@@ -314,6 +337,20 @@ def delete_backup(
     if backup.site.node_id != node_id:
         raise HTTPException(status_code=400, detail="Backup not on this node")
     
+    backup_filename = backup.filename
+    site_name = backup.site.name if backup.site else "unknown"
+    
     db.delete(backup)
     db.commit()
+    
+    # Log backup deletion
+    log_action(
+        action=models.ActionType.BACKUP_DELETE,
+        user=current_superuser,
+        target_type="backup",
+        target_id=backup_id,
+        target_name=backup_filename,
+        details={"site": site_name, "node_id": node_id},
+    )
+    
     return {"status": "deleted", "backup_id": backup_id}
