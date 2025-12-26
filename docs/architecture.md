@@ -16,8 +16,8 @@ graph TD
     subgraph "Node Cluster (VPS B, C, ...)"
         Node1[Node Agent 1]
         Node2[Node Agent 2]
-        Config1[config.json]
-        Config2[config.json]
+        Config1[daemon config]
+        Config2[daemon config]
         
         Node1 -->|Read| Config1
         Node2 -->|Read| Config2
@@ -25,7 +25,7 @@ graph TD
         Node1 -->|Stream Stats| API
         Node2 -->|Stream Stats| API
         
-        Node1 -.->|Request Join| API
+        Node1 -.->|Register Code| API
     end
     
     subgraph "Storage"
@@ -46,27 +46,29 @@ graph TD
 
 ## 2. Node Agent (The Spoke)
 
-*   **Technology**: Python Scripts (triggered by Systemd).
+*   **Technology**: `backupd` Daemon (Python).
 *   **Role**:
-    *   **Executor**: Performs `mysqldump`, file compression (zstd), and S3 uploads.
+    *   **Executor**: Executes modular backup jobs (e.g., WordPress, MongoDB).
     *   **Reporter**: Pushes heartbeat/stats to Master.
 *   **Autonomy**:
-    *   **Site Config**: Defined LOCALLY in `config.json`.
-    *   **Schedule**: Managed LOCALLY by Systemd timers.
-    *   *Result*: If Master goes offline, Backups **continue to run**.
+    *   **Settings**: Tiered settings (Global > Node > Site) synced from Master.
+    *   **Schedule**: Managed internally by daemon scheduler (resilient to master downtime).
+    *   **Encryption**: Storage credentials fetched via API and decrypted only in memory.
 
 ## 3. Data Flow
 
-### A. Enrollment
-1.  **Node Start**: User runs `configure.py`, selects "Managed Node".
-2.  **Request**: Node sends `POST /nodes/join-request` (Hostname, IP).
-3.  **Pending**: Node enters polling loop, waiting for approval.
-4.  **Action**: Admin calls `POST /nodes/approve/{id}` on Master.
-5.  **Activation**: Node receives `API_KEY` and saves it.
+### A. Enrollment (Code-Based)
+1.  **Node Start**: User runs `python -m daemon.main --mode node`.
+2.  **Code Gen**: Node generates and displays a 5-char code (e.g., `XC9D2`).
+3.  **Registration**: Admin enters code in Master Dashboard.
+4.  **Activation**: Master validates code, sets IP, and activates node.
+5.  **Auth**: Node receives persistent `API_KEY` for future requests.
 
 ### B. Backup Routine
-1.  **Trigger**: Systemd timer fires `run.sh`.
-2.  **Backup**: Agent reads local `config.json`, dumps database, compresses files.
-3.  **Upload**: Agent uploads to configured S3 storage (weighted priority).
-4.  **Reporting**: 
-    *   Agent sends `POST /stats` to Master with CPU/Disk usage and "Active Backups" count.
+1.  **Trigger**: Internal scheduler or API request (manual run).
+2.  **Job Creation**: Job added to Priority Queue.
+3.  **Execution**: `ResourceManager` allocates I/O & Network resources.
+4.  **Stages**: Module executes stages (e.g., `backup_db` -> `upload_remote` -> `cleanup`).
+5.  **Reporting**: 
+    *   Daemon updates job status via `PUT /jobs/{id}`.
+    *   Daemon sends `POST /stats` with resource usage.
