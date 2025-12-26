@@ -116,6 +116,23 @@ Nodes do not log in. They include their API Key in the header of every request.
 }
 ```
 
+### Register Node by Code
+**Endpoint**: `POST /nodes/register-by-code`
+**Auth**: Bearer Token (Super Admin)
+**Query Params**:
+- `code` (string): 5-character registration code
+- `ip_address` (string): Node's IP address
+
+**Response:**
+```json
+{
+  "id": 3,
+  "hostname": "new-node",
+  "status": "active",
+  "ip_address": "1.2.3.4"
+}
+```
+
 ---
 
 ## User Management Endpoints
