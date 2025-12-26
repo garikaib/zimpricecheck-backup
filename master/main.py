@@ -58,6 +58,13 @@ api_router.include_router(activity_logs.router, prefix="/activity-logs", tags=["
 api_router.include_router(settings_router.router, prefix="/settings", tags=["settings"])
 api_router.include_router(storage.router, prefix="/storage", tags=["storage"])
 
+# Import jobs router (requires daemon module)
+try:
+    from master.api.v1.endpoints import jobs
+    api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
+except ImportError:
+    pass  # Daemon module not available
+
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/")

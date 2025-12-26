@@ -106,6 +106,53 @@ def approve_node(
     
     return node
 
+
+@router.post("/register-by-code", response_model=schemas.NodeResponse)
+def register_node_by_code(
+    code: str,
+    ip_address: str,
+    db: Session = Depends(deps.get_db),
+    current_superuser: models.User = Depends(deps.get_current_superuser),
+) -> Any:
+    """
+    Super Admin: Register a node using its 5-character registration code.
+    The node generates this code on startup and displays it.
+    """
+    # Normalize code (uppercase, no spaces)
+    code = code.strip().upper()
+    
+    if len(code) != 5:
+        raise HTTPException(status_code=400, detail="Registration code must be 5 characters")
+    
+    # Find pending node with matching code
+    node = db.query(models.Node).filter(
+        models.Node.registration_code == code,
+        models.Node.status == models.NodeStatus.PENDING,
+    ).first()
+    
+    if not node:
+        raise HTTPException(status_code=404, detail="No pending node with this code")
+    
+    # Update node with provided IP and activate
+    node.ip_address = ip_address
+    node.status = models.NodeStatus.ACTIVE
+    node.admin_id = current_superuser.id
+    node.registration_code = None  # Clear the code after use
+    db.commit()
+    db.refresh(node)
+    
+    log_action(
+        action=models.ActionType.NODE_APPROVE,
+        user=current_superuser,
+        target_type="node",
+        target_id=node.id,
+        target_name=node.hostname,
+        details={"method": "register_by_code", "ip": ip_address},
+    )
+    
+    return node
+
+
 @router.get("/", response_model=List[schemas.NodeResponse])
 def read_nodes(
     db: Session = Depends(deps.get_db),

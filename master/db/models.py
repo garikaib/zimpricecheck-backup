@@ -41,6 +41,7 @@ class Node(Base):
     status = Column(Enum(NodeStatus), default=NodeStatus.PENDING)
     storage_quota_gb = Column(Integer, default=100)
     total_available_gb = Column(Integer, default=1000)
+    registration_code = Column(String(5), nullable=True, index=True)  # 5-char code for registration
     
     # Ownership (Node Admin)
     admin_id = Column(Integer, ForeignKey("users.id"))
