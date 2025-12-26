@@ -128,13 +128,12 @@ def read_site(
 @router.post("/{site_id}/backup/start")
 async def start_site_backup(
     site_id: int,
-    simulate: bool = True,
     db: Session = Depends(deps.get_db),
     current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
 ):
     """
-    Start a backup for a site.
-    For now, runs locally via daemon API.
+    Start a real backup for a site.
+    Runs DB dump, file compression, and upload.
     """
     site = db.query(models.Site).filter(models.Site.id == site_id).first()
     if not site:
@@ -145,7 +144,7 @@ async def start_site_backup(
         if site.node_id not in [n.id for n in current_user.nodes]:
             raise HTTPException(status_code=403, detail="Access denied")
     
-    # Check if already running
+    # Check if already running (check DB, not in-memory)
     if site.backup_status == "running":
         raise HTTPException(status_code=409, detail="Backup already running")
     
@@ -158,24 +157,17 @@ async def start_site_backup(
         bg = BackgroundTasks()
         
         request = BackupStartRequest(
+            site_id=site.id,
             site_path=site.wp_path,
             site_name=site.name,
-            simulate=simulate,
         )
         
-        result = await start_backup(request, bg)
-        
-        # Update site status
-        from datetime import datetime
-        site.backup_status = "running"
-        site.backup_progress = 0
-        site.backup_started_at = datetime.utcnow()
-        site.backup_message = "Backup starting..."
-        site.backup_error = None
-        db.commit()
+        result = await start_backup(request, bg, db)
         
         return result
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -192,12 +184,10 @@ async def stop_site_backup(
         raise HTTPException(status_code=404, detail="Site not found")
     
     try:
-        from daemon.api import stop_backup
-        result = await stop_backup()
+        from daemon.api import stop_backup, BackupStopRequest
         
-        site.backup_status = "stopped"
-        site.backup_message = "Backup stopped by user"
-        db.commit()
+        request = BackupStopRequest(site_id=site.id)
+        result = await stop_backup(request, db)
         
         return result
         
