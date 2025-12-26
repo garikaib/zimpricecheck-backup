@@ -19,6 +19,32 @@ def read_current_user(
     return current_user
 
 
+@router.put("/me", response_model=schemas.UserResponse)
+def update_current_user(
+    *,
+    db: Session = Depends(deps.get_db),
+    user_in: schemas.UserUpdate,
+    current_user: models.User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Update own profile. Users cannot change their own role.
+    """
+    # Users cannot change their own role
+    if user_in.role is not None:
+        raise HTTPException(status_code=403, detail="Cannot change your own role")
+    
+    update_data = user_in.model_dump(exclude_unset=True)
+    if "password" in update_data:
+        update_data["hashed_password"] = security.get_password_hash(update_data.pop("password"))
+    
+    for field, value in update_data.items():
+        setattr(current_user, field, value)
+    
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
 @router.get("/", response_model=schemas.UserListResponse)
 def read_users(
     db: Session = Depends(deps.get_db),
