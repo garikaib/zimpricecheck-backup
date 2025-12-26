@@ -13,6 +13,9 @@ from master.db import models
 from daemon.job_queue import get_job_queue, JobStatus, BackupJob
 from daemon.modules.base import get_module, list_modules
 
+# Import modules to register them
+import daemon.modules.wordpress  # noqa
+
 router = APIRouter()
 
 
