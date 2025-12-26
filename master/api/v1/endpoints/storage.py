@@ -160,6 +160,20 @@ def create_storage_provider(
     if existing:
         raise HTTPException(status_code=400, detail="Provider with this name already exists")
     
+    # Check for duplicate configuration (same bucket on same endpoint)
+    # This prevents adding the same storage twice with different names
+    existing_config = db.query(models.StorageProvider).filter(
+        models.StorageProvider.type == provider_in.type,
+        models.StorageProvider.bucket == provider_in.bucket,
+        models.StorageProvider.endpoint == provider_in.endpoint
+    ).first()
+    
+    if existing_config:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Storage provider configuration duplicates existing provider '{existing_config.name}'"
+        )
+    
     # If is_default, unset other defaults
     if provider_in.is_default:
         db.query(models.StorageProvider).update({"is_default": False})
