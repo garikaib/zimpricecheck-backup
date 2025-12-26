@@ -961,14 +961,21 @@ Generates a presigned download URL for the backup file.
 ### Start Backup
 **Endpoint**: `POST /sites/{site_id}/backup/start`
 **Auth**: Bearer Token (Node Admin+)
-**Query Params**: `simulate` (default: `true`) - Use `false` for real backups
+
+Starts a **real backup** that runs through all stages:
+1. Database dump (mysqldump)
+2. File backup (wp-content)
+3. Compression (tar + zstd)
+4. Upload to storage provider
+5. Cleanup
 
 **Response:**
 ```json
 {
   "success": true,
   "message": "Backup started for example.com",
-  "status": "running"
+  "status": "running",
+  "site_id": 1
 }
 ```
 
@@ -986,7 +993,7 @@ Generates a presigned download URL for the backup file.
 ```
 
 ### Get Backup Status
-**Endpoint**: `GET /sites/{site_id}/backup/status`
+**Endpoint**: `GET /daemon/backup/status/{site_id}`
 **Auth**: Bearer Token (Any authenticated)
 
 Poll this endpoint to track backup progress.
@@ -998,7 +1005,7 @@ Poll this endpoint to track backup progress.
   "site_name": "example.com",
   "status": "running",
   "progress": 60,
-  "message": "Backing up files",
+  "message": "Running: backup_files",
   "error": null,
   "started_at": "2025-12-26T10:30:58.089482"
 }
@@ -1013,6 +1020,20 @@ Poll this endpoint to track backup progress.
 | `failed` | Backup failed (check `error`) |
 | `stopped` | Backup stopped by user |
 
+### Reset Stuck Backup
+**Endpoint**: `POST /daemon/backup/reset/{site_id}`
+**Auth**: Bearer Token (Node Admin+)
+
+Resets a stuck backup status back to `idle`. Use this if a backup is stuck in `running` state.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Backup status reset to idle for example.com"
+}
+```
+
 ### Daemon Health
 **Endpoint**: `GET /daemon/health`
 **Auth**: None (Public)
@@ -1021,8 +1042,7 @@ Poll this endpoint to track backup progress.
 ```json
 {
   "status": "healthy",
-  "backup_status": "idle",
+  "running_backups": 0,
   "timestamp": "2025-12-26T10:30:00.000000"
 }
 ```
-
