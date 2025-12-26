@@ -69,7 +69,7 @@ except ImportError:
 # Import daemon router for scan/backup control
 try:
     from daemon.api import router as daemon_router
-    app.include_router(daemon_router)
+    api_router.include_router(daemon_router)
 except ImportError:
     pass  # Daemon module not available
 
