@@ -184,3 +184,67 @@ class SettingUpdate(BaseModel):
 
 class SettingsListResponse(BaseModel):
     settings: List[SettingResponse]
+
+# -- Storage Provider Schemas --
+class StorageProviderCreate(BaseModel):
+    name: str
+    type: str = "s3"  # s3, b2, mega, local
+    bucket: str
+    region: Optional[str] = None
+    endpoint: Optional[str] = None
+    access_key: str
+    secret_key: str
+    is_default: bool = False
+    storage_limit_gb: int = 100
+
+class StorageProviderUpdate(BaseModel):
+    name: Optional[str] = None
+    bucket: Optional[str] = None
+    region: Optional[str] = None
+    endpoint: Optional[str] = None
+    access_key: Optional[str] = None
+    secret_key: Optional[str] = None
+    is_default: Optional[bool] = None
+    storage_limit_gb: Optional[int] = None
+    is_active: Optional[bool] = None
+
+class StorageProviderResponse(BaseModel):
+    id: int
+    name: str
+    type: str
+    bucket: str
+    region: Optional[str] = None
+    endpoint: Optional[str] = None
+    is_default: bool
+    storage_limit_gb: int
+    used_gb: float = 0.0
+    is_active: bool
+    created_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+class StorageProviderListResponse(BaseModel):
+    providers: List[StorageProviderResponse]
+
+class NodeStorageSummary(BaseModel):
+    node_id: int
+    hostname: str
+    quota_gb: int
+    used_gb: float
+    available_gb: float
+    usage_percentage: float
+    status: str
+
+class StorageSummaryResponse(BaseModel):
+    total_quota_gb: float
+    total_used_gb: float
+    total_available_gb: float
+    usage_percentage: float
+    nodes_count: int
+    nodes_summary: List[NodeStorageSummary]
+    storage_providers: List[StorageProviderResponse]
+
+class StorageTestResponse(BaseModel):
+    success: bool
+    message: str
+    available_space_gb: Optional[float] = None

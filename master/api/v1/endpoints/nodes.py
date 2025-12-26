@@ -354,3 +354,40 @@ def delete_backup(
     )
     
     return {"status": "deleted", "backup_id": backup_id}
+
+
+@router.get("/storage-config")
+def get_node_storage_config(
+    db: Session = Depends(deps.get_db),
+    current_node: models.Node = Depends(deps.get_current_node),
+) -> Any:
+    """
+    Node: Fetch storage provider credentials for backup operations.
+    Returns decrypted credentials for the default storage provider.
+    """
+    from master.core.encryption import decrypt_credential
+    
+    # Get default storage provider
+    provider = db.query(models.StorageProvider).filter(
+        models.StorageProvider.is_default == True,
+        models.StorageProvider.is_active == True,
+    ).first()
+    
+    if not provider:
+        raise HTTPException(status_code=404, detail="No default storage provider configured")
+    
+    # Decrypt credentials
+    access_key = decrypt_credential(provider.access_key_encrypted)
+    secret_key = decrypt_credential(provider.secret_key_encrypted)
+    
+    return {
+        "provider": {
+            "type": provider.type.value if hasattr(provider.type, 'value') else str(provider.type),
+            "bucket": provider.bucket,
+            "region": provider.region,
+            "endpoint": provider.endpoint,
+            "access_key": access_key,
+            "secret_key": secret_key,
+            "storage_limit_gb": provider.storage_limit_gb,
+        }
+    }

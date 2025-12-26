@@ -133,3 +133,30 @@ class Settings(Base):
     value = Column(String, nullable=True)
     description = Column(String, nullable=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class ProviderType(str, enum.Enum):
+    S3 = "s3"
+    B2 = "b2"
+    MEGA = "mega"
+    LOCAL = "local"
+
+
+class StorageProvider(Base):
+    """Storage provider configuration with encrypted credentials."""
+    __tablename__ = "storage_providers"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    type = Column(Enum(ProviderType), default=ProviderType.S3)
+    bucket = Column(String, nullable=False)
+    region = Column(String, nullable=True)
+    endpoint = Column(String, nullable=True)  # For S3-compatible (Wasabi, Backblaze, etc.)
+    access_key_encrypted = Column(String, nullable=True)  # Encrypted at rest
+    secret_key_encrypted = Column(String, nullable=True)  # Encrypted at rest
+    is_default = Column(Boolean, default=False, index=True)
+    storage_limit_gb = Column(Integer, default=100)
+    used_bytes = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

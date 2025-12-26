@@ -1,6 +1,6 @@
 from typing import Generator
 import logging
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
@@ -109,3 +109,34 @@ def get_current_node_admin_or_higher(
             status_code=403, detail="Insufficient privileges"
         )
     return current_user
+
+
+def get_current_node(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> models.Node:
+    """
+    Authenticate node via X-API-KEY header.
+    Used for node-to-master API calls (e.g., fetching storage config).
+    """
+    api_key = request.headers.get("X-API-KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing API key",
+        )
+    
+    node = db.query(models.Node).filter(models.Node.api_key == api_key).first()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+    
+    if node.status != models.NodeStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Node is not active",
+        )
+    
+    return node
