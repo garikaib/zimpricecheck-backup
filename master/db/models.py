@@ -123,3 +123,13 @@ class ActivityLog(Base):
     ip_address = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+
+class Settings(Base):
+    """Key-value store for application settings."""
+    __tablename__ = "settings"
+    
+    key = Column(String, primary_key=True, index=True)
+    value = Column(String, nullable=True)
+    description = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

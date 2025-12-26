@@ -33,6 +33,7 @@ class UserListResponse(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    turnstile_token: Optional[str] = None  # Cloudflare Turnstile token
 
 # -- Token Schema --
 class Token(BaseModel):
@@ -167,3 +168,19 @@ class ActivityLogResponse(BaseModel):
 class ActivityLogListResponse(BaseModel):
     logs: List[ActivityLogResponse]
     total: int
+
+# -- Settings Schemas --
+class SettingResponse(BaseModel):
+    key: str
+    value: Optional[str] = None
+    description: Optional[str] = None
+    updated_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+class SettingUpdate(BaseModel):
+    value: Optional[str] = None
+    description: Optional[str] = None
+
+class SettingsListResponse(BaseModel):
+    settings: List[SettingResponse]

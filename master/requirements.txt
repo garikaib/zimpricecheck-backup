@@ -10,3 +10,4 @@ email-validator>=2.1.1
 pydantic==2.6.0
 pydantic-settings==2.1.0
 psycopg2-binary==2.9.9
+httpx
