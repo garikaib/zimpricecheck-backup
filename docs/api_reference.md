@@ -57,7 +57,45 @@ Include the token in subsequent requests:
 Authorization: Bearer <access_token>
 ```
 
-### 2. Node Authentication
+> **Note:** Login will fail with `403 Forbidden` if the user's email is not verified.
+
+### 2. Magic Link Login (Passwordless)
+
+#### Request Magic Link
+**Endpoint**: `POST /auth/magic-link`
+**Content-Type**: `application/json`
+
+**Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "If the email exists, a login link will be sent."
+}
+```
+
+#### Login via Magic Link
+**Endpoint**: `GET /auth/magic-link/{token}`
+**Auth**: None (Public)
+
+**Response (200 OK):**
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "token_type": "bearer"
+}
+```
+
+**Errors:**
+- `400 Bad Request`: Invalid or expired token
+
+### 3. Node Authentication
 Nodes do not log in. They include their API Key in the header of every request.
 *   **Header**: `X-API-KEY: <node_api_key>`
 
@@ -187,6 +225,18 @@ Nodes do not log in. They include their API Key in the header of every request.
 }
 ```
 
+> **Note:** New users receive a verification email with a 6-character alphanumeric code. They must verify before logging in.
+
+**Response includes:**
+```json
+{
+  "id": 2,
+  "email": "newuser@example.com",
+  "is_verified": false,
+  "pending_email": null
+}
+```
+
 ### Get User by ID
 **Endpoint**: `GET /users/{user_id}`
 **Auth**: Bearer Token (Node Admin+)
@@ -214,6 +264,144 @@ Nodes do not log in. They include their API Key in the header of every request.
 **Auth**: Bearer Token (Any authenticated)
 
 Users can update their own profile (email, full_name, password) but cannot change their role.
+
+### Verify Email
+**Endpoint**: `POST /users/{user_id}/verify-email`
+**Auth**: Bearer Token (Node Admin+)
+
+**Body:**
+```json
+{
+  "code": "A3X9K2"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Email verified successfully"
+}
+```
+
+### Resend Verification
+**Endpoint**: `POST /users/{user_id}/resend-verification`
+**Auth**: Bearer Token (Node Admin+)
+
+Generates a new code and sends it to the user's email.
+
+### Force Verify (Super Admin)
+**Endpoint**: `POST /users/{user_id}/force-verify`
+**Auth**: Bearer Token (Super Admin only)
+
+**Body:**
+```json
+{
+  "code": "",
+  "force_verify": true
+}
+```
+
+> **Warning:** Super Admins cannot force-verify their own email changes.
+
+---
+
+## Communication Channels Endpoints
+
+Manage email, SMS, and other communication providers. Super Admin only.
+
+### List Channels
+**Endpoint**: `GET /communications/channels`
+**Auth**: Bearer Token (Super Admin)
+
+**Response:**
+```json
+{
+  "channels": [
+    {
+      "id": 1,
+      "name": "SendPulse API",
+      "channel_type": "email",
+      "provider": "sendpulse_api",
+      "allowed_roles": ["verification", "notification", "alert", "login_link"],
+      "is_default": true,
+      "is_active": true,
+      "priority": 1
+    }
+  ],
+  "total": 1
+}
+```
+
+### Create Channel
+**Endpoint**: `POST /communications/channels`
+**Auth**: Bearer Token (Super Admin)
+
+**Body:**
+```json
+{
+  "name": "Backup SMTP",
+  "channel_type": "email",
+  "provider": "smtp",
+  "config": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "encryption": "tls",
+    "username": "user@example.com",
+    "password": "secret",
+    "from_email": "noreply@example.com",
+    "from_name": "My App"
+  },
+  "allowed_roles": ["verification", "notification"],
+  "is_default": false,
+  "priority": 10
+}
+```
+
+### Update/Delete Channel
+- `PUT /communications/channels/{id}` - Update
+- `DELETE /communications/channels/{id}` - Delete
+
+### Test Channel
+**Endpoint**: `POST /communications/channels/{id}/test`
+**Auth**: Bearer Token (Super Admin)
+
+**Body:**
+```json
+{
+  "to": "test@example.com"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Test message sent successfully",
+  "provider": "SendPulse API"
+}
+```
+
+### Available Providers
+
+| Channel Type | Provider | Description |
+|--------------|----------|-------------|
+| `email` | `sendpulse_api` | SendPulse REST API (recommended) |
+| `email` | `smtp` | Standard SMTP (fallback) |
+| `sms` | (future) | Twilio, Nexmo |
+| `whatsapp` | (future) | WhatsApp Business |
+| `push` | (future) | Firebase Cloud Messaging |
+
+### Message Roles
+
+| Role | Description |
+|------|-------------|
+| `verification` | Email/phone verification codes |
+| `notification` | General notifications |
+| `alert` | Urgent alerts (backup failures) |
+| `marketing` | Bulk promotional emails |
+| `transactional` | Order confirmations, receipts |
+| `login_link` | Magic login links |
 
 ---
 
@@ -400,6 +588,9 @@ Returns aggregate storage across all nodes with per-node breakdown.
   "storage_limit_gb": 500
 }
 ```
+
+**Errors:**
+- `400 Bad Request`: If provider name exists OR if configuration (type+bucket+endpoint) duplicates an existing provider.
 
 ### Update/Delete Provider
 - `PUT /storage/providers/{id}` - Update provider

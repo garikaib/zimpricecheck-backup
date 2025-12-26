@@ -95,7 +95,8 @@ def read_users(
 
 
 @router.post("/", response_model=schemas.UserResponse)
-def create_user(
+async def create_user(
+    request: Request,
     *,
     db: Session = Depends(deps.get_db),
     user_in: schemas.UserCreate,
@@ -103,7 +104,13 @@ def create_user(
 ) -> Any:
     """
     Super Admin: Create a new user.
+    User will receive a verification email with a code.
     """
+    from datetime import datetime, timedelta
+    from master.core.communications.code_generator import generate_verification_code
+    from master.core.communications import send_message
+    from master.core.communications.templates import render_verification_email
+    
     # Check if email already exists
     existing = db.query(models.User).filter(models.User.email == user_in.email).first()
     if existing:
@@ -112,6 +119,9 @@ def create_user(
             detail="A user with this email already exists."
         )
     
+    # Generate verification code
+    verification_code = generate_verification_code()
+    
     # Create user with hashed password
     user = models.User(
         email=user_in.email,
@@ -119,10 +129,30 @@ def create_user(
         full_name=user_in.full_name,
         is_active=user_in.is_active,
         role=user_in.role,
+        is_verified=False,
+        email_verification_code=verification_code,
+        email_verification_expires=datetime.utcnow() + timedelta(hours=24),
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+    
+    # Send verification email
+    subject, html, text = render_verification_email(verification_code, user.full_name)
+    result = await send_message(
+        db=db,
+        channel_type=models.ChannelType.EMAIL,
+        to=user.email,
+        subject=subject,
+        body=text,
+        html=html,
+        role=models.MessageRole.VERIFICATION,
+    )
+    
+    if not result.success:
+        # Log failure but don't fail the request
+        import logging
+        logging.getLogger(__name__).error(f"Failed to send verification email: {result.error}")
     
     # Log user creation
     log_action(
@@ -254,3 +284,145 @@ def delete_user(
     )
     
     return user
+
+
+@router.post("/{user_id}/verify-email", response_model=schemas.VerifyEmailResponse)
+def verify_email(
+    user_id: int,
+    verify_request: schemas.VerifyEmailRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+) -> Any:
+    """
+    Verify a user's email with the provided code.
+    - For new users: verifies initial email
+    - For email changes: confirms the pending email change
+    """
+    from datetime import datetime
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check code
+    if not user.email_verification_code:
+        raise HTTPException(status_code=400, detail="No pending verification")
+    
+    if user.email_verification_expires and user.email_verification_expires < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Verification code has expired")
+    
+    if user.email_verification_code != verify_request.code.upper():
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+    
+    # Handle email change vs initial verification
+    if user.pending_email:
+        # Email change - update email
+        old_email = user.email
+        user.email = user.pending_email
+        user.pending_email = None
+        message = f"Email changed from {old_email} to {user.email}"
+    else:
+        # Initial verification
+        user.is_verified = True
+        message = "Email verified successfully"
+    
+    # Clear verification fields
+    user.email_verification_code = None
+    user.email_verification_expires = None
+    
+    db.commit()
+    
+    return schemas.VerifyEmailResponse(success=True, message=message)
+
+
+@router.post("/{user_id}/resend-verification", response_model=schemas.VerifyEmailResponse)
+async def resend_verification(
+    user_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+) -> Any:
+    """
+    Resend the verification email for a user.
+    """
+    from datetime import datetime, timedelta
+    from master.core.communications.code_generator import generate_verification_code
+    from master.core.communications import send_message
+    from master.core.communications.templates import render_verification_email, render_email_change_email
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Generate new code
+    verification_code = generate_verification_code()
+    user.email_verification_code = verification_code
+    user.email_verification_expires = datetime.utcnow() + timedelta(hours=24)
+    db.commit()
+    
+    # Determine target email and template
+    if user.pending_email:
+        target_email = user.pending_email
+        subject, html, text = render_email_change_email(verification_code, user.pending_email, user.full_name)
+    else:
+        target_email = user.email
+        subject, html, text = render_verification_email(verification_code, user.full_name)
+    
+    # Send email
+    result = await send_message(
+        db=db,
+        channel_type=models.ChannelType.EMAIL,
+        to=target_email,
+        subject=subject,
+        body=text,
+        html=html,
+        role=models.MessageRole.VERIFICATION,
+    )
+    
+    if not result.success:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {result.error}")
+    
+    return schemas.VerifyEmailResponse(success=True, message="Verification email sent")
+
+
+@router.post("/{user_id}/force-verify", response_model=schemas.VerifyEmailResponse)
+def force_verify_email(
+    user_id: int,
+    confirm_request: schemas.ConfirmEmailChangeRequest,
+    db: Session = Depends(deps.get_db),
+    current_superuser: models.User = Depends(deps.get_current_superuser),
+) -> Any:
+    """
+    Super Admin: Force verify a user's email without code.
+    Requires force_verify=True in request body.
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if not confirm_request.force_verify:
+        raise HTTPException(status_code=400, detail="force_verify must be true to use this endpoint")
+    
+    # Cannot force-verify own email change (must use code)
+    if user.id == current_superuser.id and user.pending_email:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot force-verify your own email change. Please use the verification code."
+        )
+    
+    # Handle email change vs initial verification
+    if user.pending_email:
+        old_email = user.email
+        user.email = user.pending_email
+        user.pending_email = None
+        message = f"Email force-changed from {old_email} to {user.email}"
+    else:
+        user.is_verified = True
+        message = "Email force-verified successfully"
+    
+    # Clear verification fields
+    user.email_verification_code = None
+    user.email_verification_expires = None
+    
+    db.commit()
+    
+    return schemas.VerifyEmailResponse(success=True, message=message)

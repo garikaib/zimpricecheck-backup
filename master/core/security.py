@@ -23,3 +23,27 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+
+def encrypt_value(value: str) -> str:
+    """
+    Encrypt a value for storage.
+    
+    For simplicity, uses base64 encoding with a simple XOR cipher.
+    In production, use proper encryption (Fernet, etc.)
+    """
+    import base64
+    key = settings.SECRET_KEY[:32].ljust(32, '0')
+    encrypted = bytes(a ^ ord(b) for a, b in zip(value.encode(), (key * ((len(value) // len(key)) + 1))))
+    return base64.b64encode(encrypted).decode()
+
+
+def decrypt_value(encrypted: str) -> str:
+    """
+    Decrypt a value from storage.
+    """
+    import base64
+    key = settings.SECRET_KEY[:32].ljust(32, '0')
+    decoded = base64.b64decode(encrypted.encode())
+    decrypted = bytes(a ^ ord(b) for a, b in zip(decoded, (key * ((len(decoded) // len(key)) + 1))))
+    return decrypted.decode()

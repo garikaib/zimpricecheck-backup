@@ -1,9 +1,10 @@
 from master.core.config import get_settings
 from master.db.session import SessionLocal, engine
 from master.db import models
-from master.core.security import get_password_hash
+from master.core.security import get_password_hash, encrypt_value
 import secrets
 import socket
+import json
 
 def init_db():
     settings = get_settings()
@@ -21,12 +22,26 @@ def init_db():
             hashed_password=get_password_hash(settings.FIRST_SUPERUSER_PASSWORD),
             full_name="Super Admin",
             role=models.UserRole.SUPER_ADMIN,
+            is_verified=True,  # First user is auto-verified
         )
         db.add(user)
         db.commit()
         db.refresh(user)
     else:
         print(f"[*] Superuser already exists: {settings.FIRST_SUPERUSER}")
+        # Migrate: ensure existing users are verified
+        if not user.is_verified:
+            user.is_verified = True
+            db.commit()
+            print(f"[*] Marked existing superuser as verified")
+    
+    # Migrate: mark ALL existing users as verified
+    unverified_count = db.query(models.User).filter(
+        models.User.is_verified == False
+    ).update({"is_verified": True})
+    if unverified_count > 0:
+        db.commit()
+        print(f"[*] Migrated {unverified_count} existing users to verified status")
     
     # Check if Master node exists
     master_hostname = socket.gethostname()
@@ -47,10 +62,60 @@ def init_db():
     else:
         print(f"[*] Master node already exists: {master_hostname}")
     
+    # Seed default email channel if none exists
+    email_channel = db.query(models.CommunicationChannel).filter(
+        models.CommunicationChannel.channel_type == models.ChannelType.EMAIL
+    ).first()
+    
+    if not email_channel:
+        print("[*] Creating default SendPulse API email channel")
+        config = {
+            "api_id": "76cf1854fb85c6f412098f52c4cdbd2e",
+            "api_secret": "5911e725763f45b67477e45c41abce0b",
+            "from_email": "business@zimpricecheck.com",
+            "from_name": "WordPress Backup",
+        }
+        channel = models.CommunicationChannel(
+            name="SendPulse API",
+            channel_type=models.ChannelType.EMAIL,
+            provider="sendpulse_api",
+            config_encrypted=encrypt_value(json.dumps(config)),
+            allowed_roles=json.dumps(["verification", "notification", "alert", "login_link"]),
+            is_default=True,
+            priority=1,
+        )
+        db.add(channel)
+        
+        # Also add SMTP fallback
+        smtp_config = {
+            "host": "smtp-pulse.com",
+            "port": 587,
+            "encryption": "tls",
+            "username": "garikaib@gmail.com",
+            "password": "Zten4ifS4CWn",
+            "from_email": "business@zimpricecheck.com",
+            "from_name": "WordPress Backup",
+        }
+        smtp_channel = models.CommunicationChannel(
+            name="SendPulse SMTP",
+            channel_type=models.ChannelType.EMAIL,
+            provider="smtp",
+            config_encrypted=encrypt_value(json.dumps(smtp_config)),
+            allowed_roles=json.dumps(["verification", "notification", "alert", "login_link"]),
+            is_default=False,
+            priority=10,  # Lower priority (fallback)
+        )
+        db.add(smtp_channel)
+        db.commit()
+        print("[*] Created SendPulse API and SMTP email channels")
+    else:
+        print(f"[*] Email channel already exists: {email_channel.name}")
+    
     db.close()
 
 if __name__ == "__main__":
     print("Initializing Database...")
     init_db()
     print("Done!")
+
 

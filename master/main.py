@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from master.core.config import get_settings
-from master.api.v1.endpoints import auth, nodes, stats, users, sites, activity_logs, settings as settings_router, storage
+from master.api.v1.endpoints import auth, nodes, stats, users, sites, activity_logs, settings as settings_router, storage, communications
 from fastapi import APIRouter
 
 # Configure logging to show our debug messages
@@ -57,6 +57,7 @@ api_router.include_router(sites.router, prefix="/sites", tags=["sites"])
 api_router.include_router(activity_logs.router, prefix="/activity-logs", tags=["activity-logs"])
 api_router.include_router(settings_router.router, prefix="/settings", tags=["settings"])
 api_router.include_router(storage.router, prefix="/storage", tags=["storage"])
+api_router.include_router(communications.router, prefix="/communications", tags=["communications"])
 
 # Import jobs router (requires daemon module)
 try:

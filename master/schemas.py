@@ -15,6 +15,8 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
+    is_verified: bool = False
+    pending_email: Optional[EmailStr] = None
     class Config:
         from_attributes = True
 
@@ -248,3 +250,82 @@ class StorageTestResponse(BaseModel):
     success: bool
     message: str
     available_space_gb: Optional[float] = None
+
+
+# -- Communication Channel Schemas --
+class CommunicationChannelCreate(BaseModel):
+    name: str
+    channel_type: str  # email, sms, whatsapp, push
+    provider: str  # sendpulse_api, smtp, twilio, etc.
+    config: dict  # Provider-specific configuration (will be encrypted)
+    allowed_roles: Optional[List[str]] = None  # verification, notification, etc.
+    is_default: bool = False
+    priority: int = 10
+
+
+class CommunicationChannelUpdate(BaseModel):
+    name: Optional[str] = None
+    config: Optional[dict] = None
+    allowed_roles: Optional[List[str]] = None
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+    priority: Optional[int] = None
+
+
+class CommunicationChannelResponse(BaseModel):
+    id: int
+    name: str
+    channel_type: str
+    provider: str
+    allowed_roles: Optional[List[str]] = None
+    is_default: bool
+    is_active: bool
+    priority: int
+    created_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+
+class CommunicationChannelListResponse(BaseModel):
+    channels: List[CommunicationChannelResponse]
+    total: int
+
+
+class CommunicationTestRequest(BaseModel):
+    to: str  # Recipient for test message
+
+
+class CommunicationTestResponse(BaseModel):
+    success: bool
+    message: str
+    provider: Optional[str] = None
+
+
+# -- Verification Schemas --
+class VerifyEmailRequest(BaseModel):
+    code: str
+
+
+class VerifyEmailResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: Optional[EmailStr] = None  # Optional, uses current user if not provided
+
+
+class ConfirmEmailChangeRequest(BaseModel):
+    code: str
+    force_verify: bool = False  # Super Admin only: skip code verification
+
+
+# -- Magic Link Schemas --
+class MagicLinkRequest(BaseModel):
+    email: EmailStr
+
+
+class MagicLinkResponse(BaseModel):
+    success: bool
+    message: str
+

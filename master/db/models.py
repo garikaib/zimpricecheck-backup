@@ -11,6 +11,23 @@ class UserRole(str, enum.Enum):
     NODE_ADMIN = "node_admin"
     SITE_ADMIN = "site_admin"
 
+
+class ChannelType(str, enum.Enum):
+    EMAIL = "email"
+    SMS = "sms"
+    WHATSAPP = "whatsapp"
+    PUSH = "push"
+
+
+class MessageRole(str, enum.Enum):
+    VERIFICATION = "verification"
+    NOTIFICATION = "notification"
+    ALERT = "alert"
+    MARKETING = "marketing"
+    TRANSACTIONAL = "transactional"
+    LOGIN_LINK = "login_link"
+
+
 class User(Base):
     __tablename__ = "users"
     
@@ -20,6 +37,16 @@ class User(Base):
     full_name = Column(String)
     is_active = Column(Boolean, default=True)
     role = Column(Enum(UserRole), default=UserRole.SITE_ADMIN)
+    
+    # Email verification
+    is_verified = Column(Boolean, default=False)
+    email_verification_code = Column(String, nullable=True)
+    email_verification_expires = Column(DateTime, nullable=True)
+    pending_email = Column(String, nullable=True)
+    
+    # Magic link login
+    magic_link_token = Column(String, nullable=True, index=True)
+    magic_link_expires = Column(DateTime, nullable=True)
     
     # Relationships
     nodes = relationship("Node", back_populates="admin")
@@ -166,3 +193,20 @@ class StorageProvider(Base):
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
     backups = relationship("Backup", back_populates="provider")
+
+
+class CommunicationChannel(Base):
+    """Communication channel configuration (email, SMS, WhatsApp, push)."""
+    __tablename__ = "communication_channels"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    channel_type = Column(Enum(ChannelType), nullable=False, index=True)
+    provider = Column(String, nullable=False)  # "sendpulse_api", "smtp", "twilio", etc.
+    config_encrypted = Column(String, nullable=True)  # JSON config (encrypted)
+    allowed_roles = Column(String, nullable=True)  # JSON list: ["verification", "notification"]
+    is_default = Column(Boolean, default=False, index=True)
+    is_active = Column(Boolean, default=True)
+    priority = Column(Integer, default=10)  # Lower = higher priority (for failover)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
