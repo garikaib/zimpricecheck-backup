@@ -306,6 +306,60 @@ Generates a new code and sends it to the user's email.
 
 ---
 
+## Node/Site Assignment Endpoints
+
+Manage which nodes and sites users can access. Super Admin only.
+
+### Get User's Nodes
+**Endpoint**: `GET /users/{user_id}/nodes`
+**Auth**: Bearer Token (Super Admin)
+
+**Response:**
+```json
+[
+  { "id": 1, "hostname": "node-1", "ip_address": "1.2.3.4", "status": "active" }
+]
+```
+
+### Assign Nodes to User
+**Endpoint**: `POST /users/{user_id}/nodes`
+**Auth**: Bearer Token (Super Admin)
+
+**Body:**
+```json
+{ "node_ids": [1, 3, 5] }
+```
+
+**Response:**
+```json
+{ "message": "Nodes assigned", "assigned": [1, 3, 5] }
+```
+
+### Remove Node from User
+**Endpoint**: `DELETE /users/{user_id}/nodes/{node_id}`
+**Auth**: Bearer Token (Super Admin)
+**Response**: `204 No Content`
+
+### Get User's Sites
+**Endpoint**: `GET /users/{user_id}/sites`
+**Auth**: Bearer Token (Super Admin)
+
+### Assign Sites to User
+**Endpoint**: `POST /users/{user_id}/sites`
+**Auth**: Bearer Token (Super Admin)
+
+**Body:**
+```json
+{ "site_ids": [1, 2] }
+```
+
+### Remove Site from User
+**Endpoint**: `DELETE /users/{user_id}/sites/{site_id}`
+**Auth**: Bearer Token (Super Admin)
+**Response**: `204 No Content`
+
+---
+
 ## Communication Channels Endpoints
 
 Manage email, SMS, and other communication providers. Super Admin only.

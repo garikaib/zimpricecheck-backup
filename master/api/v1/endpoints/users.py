@@ -10,6 +10,21 @@ from master.core.activity_logger import log_action
 router = APIRouter()
 
 
+def user_to_response(user: models.User) -> dict:
+    """Convert User model to response dict with assignment IDs."""
+    return {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "is_active": user.is_active,
+        "role": user.role,
+        "is_verified": user.is_verified,
+        "pending_email": user.pending_email,
+        "assigned_nodes": [n.id for n in user.assigned_nodes],
+        "assigned_sites": [s.id for s in user.assigned_sites],
+    }
+
+
 @router.get("/me", response_model=schemas.UserResponse)
 def read_current_user(
     current_user: models.User = Depends(deps.get_current_active_user),
@@ -17,7 +32,7 @@ def read_current_user(
     """
     Get current authenticated user profile.
     """
-    return current_user
+    return user_to_response(current_user)
 
 
 @router.put("/me", response_model=schemas.UserResponse)
@@ -91,7 +106,7 @@ def read_users(
             .count()
         )
     
-    return {"users": users, "total": total}
+    return {"users": [user_to_response(u) for u in users], "total": total}
 
 
 @router.post("/", response_model=schemas.UserResponse)
@@ -426,3 +441,167 @@ def force_verify_email(
     db.commit()
     
     return schemas.VerifyEmailResponse(success=True, message=message)
+
+
+# -- Node Assignment Endpoints --
+
+@router.get("/{user_id}/nodes", response_model=List[schemas.NodeResponse])
+def get_user_nodes(
+    user_id: int,
+    db: Session = Depends(deps.get_db),
+    current_superuser: models.User = Depends(deps.get_current_superuser),
+) -> Any:
+    """
+    Get nodes assigned to a user. Super Admin only.
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user.assigned_nodes
+
+
+@router.post("/{user_id}/nodes", response_model=schemas.AssignmentResponse)
+def assign_nodes_to_user(
+    user_id: int,
+    assignment: schemas.NodeAssignment,
+    db: Session = Depends(deps.get_db),
+    current_superuser: models.User = Depends(deps.get_current_superuser),
+) -> Any:
+    """
+    Assign nodes to a user. Super Admin only.
+    Replaces any existing assignments.
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify all nodes exist
+    nodes = db.query(models.Node).filter(models.Node.id.in_(assignment.node_ids)).all()
+    if len(nodes) != len(assignment.node_ids):
+        raise HTTPException(status_code=400, detail="One or more nodes not found")
+    
+    # Update assignments
+    user.assigned_nodes = nodes
+    db.commit()
+    
+    log_action(
+        action=models.ActionType.USER_UPDATE,
+        user=current_superuser,
+        target_type="user",
+        target_id=user.id,
+        target_name=user.email,
+        details={"assigned_nodes": assignment.node_ids},
+    )
+    
+    return schemas.AssignmentResponse(
+        message="Nodes assigned",
+        assigned=[n.id for n in nodes],
+    )
+
+
+@router.delete("/{user_id}/nodes/{node_id}", status_code=204)
+def remove_node_from_user(
+    user_id: int,
+    node_id: int,
+    db: Session = Depends(deps.get_db),
+    current_superuser: models.User = Depends(deps.get_current_superuser),
+) -> None:
+    """
+    Remove a single node assignment from a user. Super Admin only.
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    node = db.query(models.Node).filter(models.Node.id == node_id).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    
+    if node in user.assigned_nodes:
+        user.assigned_nodes.remove(node)
+        db.commit()
+    
+    return None
+
+
+# -- Site Assignment Endpoints --
+
+@router.get("/{user_id}/sites", response_model=List[schemas.SiteResponse])
+def get_user_sites(
+    user_id: int,
+    db: Session = Depends(deps.get_db),
+    current_superuser: models.User = Depends(deps.get_current_superuser),
+) -> Any:
+    """
+    Get sites assigned to a user. Super Admin only.
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user.assigned_sites
+
+
+@router.post("/{user_id}/sites", response_model=schemas.AssignmentResponse)
+def assign_sites_to_user(
+    user_id: int,
+    assignment: schemas.SiteAssignment,
+    db: Session = Depends(deps.get_db),
+    current_superuser: models.User = Depends(deps.get_current_superuser),
+) -> Any:
+    """
+    Assign sites to a user. Super Admin only.
+    Replaces any existing assignments.
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify all sites exist
+    sites = db.query(models.Site).filter(models.Site.id.in_(assignment.site_ids)).all()
+    if len(sites) != len(assignment.site_ids):
+        raise HTTPException(status_code=400, detail="One or more sites not found")
+    
+    # Update assignments
+    user.assigned_sites = sites
+    db.commit()
+    
+    log_action(
+        action=models.ActionType.USER_UPDATE,
+        user=current_superuser,
+        target_type="user",
+        target_id=user.id,
+        target_name=user.email,
+        details={"assigned_sites": assignment.site_ids},
+    )
+    
+    return schemas.AssignmentResponse(
+        message="Sites assigned",
+        assigned=[s.id for s in sites],
+    )
+
+
+@router.delete("/{user_id}/sites/{site_id}", status_code=204)
+def remove_site_from_user(
+    user_id: int,
+    site_id: int,
+    db: Session = Depends(deps.get_db),
+    current_superuser: models.User = Depends(deps.get_current_superuser),
+) -> None:
+    """
+    Remove a single site assignment from a user. Super Admin only.
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    site = db.query(models.Site).filter(models.Site.id == site_id).first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    if site in user.assigned_sites:
+        user.assigned_sites.remove(site)
+        db.commit()
+    
+    return None

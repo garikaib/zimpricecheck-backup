@@ -17,6 +17,8 @@ class UserResponse(UserBase):
     id: int
     is_verified: bool = False
     pending_email: Optional[EmailStr] = None
+    assigned_nodes: List[int] = []
+    assigned_sites: List[int] = []
     class Config:
         from_attributes = True
 
@@ -328,4 +330,18 @@ class MagicLinkRequest(BaseModel):
 class MagicLinkResponse(BaseModel):
     success: bool
     message: str
+
+
+# -- Node/Site Assignment Schemas --
+class NodeAssignment(BaseModel):
+    node_ids: List[int]
+
+
+class SiteAssignment(BaseModel):
+    site_ids: List[int]
+
+
+class AssignmentResponse(BaseModel):
+    message: str
+    assigned: List[int]
 

@@ -1,10 +1,28 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Enum, Table
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
 import enum
 import datetime
 
 Base = declarative_base()
+
+
+# Association tables for user role-based assignments
+user_nodes = Table(
+    "user_nodes",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("node_id", Integer, ForeignKey("nodes.id", ondelete="CASCADE"), primary_key=True),
+    Column("assigned_at", DateTime, default=datetime.datetime.utcnow),
+)
+
+user_sites = Table(
+    "user_sites",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("site_id", Integer, ForeignKey("sites.id", ondelete="CASCADE"), primary_key=True),
+    Column("assigned_at", DateTime, default=datetime.datetime.utcnow),
+)
 
 class UserRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
@@ -48,9 +66,13 @@ class User(Base):
     magic_link_token = Column(String, nullable=True, index=True)
     magic_link_expires = Column(DateTime, nullable=True)
     
-    # Relationships
+    # Relationships (admin ownership)
     nodes = relationship("Node", back_populates="admin")
     sites = relationship("Site", back_populates="admin")
+    
+    # Role-based assignments (many-to-many)
+    assigned_nodes = relationship("Node", secondary=user_nodes, backref="assigned_users")
+    assigned_sites = relationship("Site", secondary=user_sites, backref="assigned_users")
 
 class NodeStatus(str, enum.Enum):
     PENDING = "pending"
