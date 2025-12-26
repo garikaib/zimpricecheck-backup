@@ -363,7 +363,18 @@ Returns aggregate storage across all nodes with per-node breakdown.
       "status": "active"
     }
   ],
-  "storage_providers": [...]
+  "storage_providers": [
+    {
+      "id": 1,
+      "name": "S3 Prod",
+      "type": "s3",
+      "bucket": "backups-prod",
+      "storage_limit_gb": 1000,
+      "used_gb": 312.5,
+      "is_default": true,
+      "is_active": true
+    }
+  ]
 }
 ```
 
