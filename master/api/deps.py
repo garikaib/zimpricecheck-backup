@@ -119,7 +119,10 @@ def get_current_node(
     Authenticate node via X-API-KEY header.
     Used for node-to-master API calls (e.g., fetching storage config).
     """
+    print(f"[NODE AUTH] get_current_node called")
     api_key = request.headers.get("X-API-KEY")
+    print(f"[NODE AUTH] X-API-KEY: {api_key[:20]}..." if api_key else "[NODE AUTH] X-API-KEY: None")
+    
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
