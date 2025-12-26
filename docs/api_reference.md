@@ -844,20 +844,7 @@ Manually add a site by providing its filesystem path. The system verifies the pa
 **Errors:**
 - `400 Bad Request`: Invalid site (missing `wp-content` or path does not exist).
 - `422 Unprocessable Entity`: `wp-config.php` not found (returns hint to provide explicit path).
-      "path": "/var/www/example.com/htdocs",
-      "has_wp_config": true,
-      "has_wp_content": true,
-      "db_name": "wp_example",
-      "db_user": "dbuser",
-      "db_host": "localhost",
-      "table_prefix": "wp_",
-      "is_complete": true
-    }
-  ],
-  "total": 1,
-  "scanned_path": "/var/www"
-}
-```
+
 
 ### Import Discovered Site
 **Endpoint**: `POST /sites/import`
