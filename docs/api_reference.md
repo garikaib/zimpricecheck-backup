@@ -319,6 +319,93 @@ All actions are automatically logged with IP address (Cloudflare-aware), user ag
 
 ---
 
+## Storage Management Endpoints
+
+### Storage Summary
+**Endpoint**: `GET /storage/summary`
+**Auth**: Bearer Token (Node Admin+)
+
+Returns aggregate storage across all nodes with per-node breakdown.
+
+**Response:**
+```json
+{
+  "total_quota_gb": 500,
+  "total_used_gb": 312.5,
+  "total_available_gb": 187.5,
+  "usage_percentage": 62.5,
+  "nodes_count": 5,
+  "nodes_summary": [
+    {
+      "node_id": 1,
+      "hostname": "backup-node-1",
+      "quota_gb": 100,
+      "used_gb": 75.2,
+      "available_gb": 24.8,
+      "usage_percentage": 75.2,
+      "status": "active"
+    }
+  ],
+  "storage_providers": [...]
+}
+```
+
+### List Storage Providers
+**Endpoint**: `GET /storage/providers`
+**Auth**: Bearer Token (Super Admin)
+
+### Add Storage Provider
+**Endpoint**: `POST /storage/providers`
+**Auth**: Bearer Token (Super Admin)
+
+**Body:**
+```json
+{
+  "name": "Primary S3",
+  "type": "s3",
+  "bucket": "backup-bucket",
+  "region": "us-east-1",
+  "endpoint": null,
+  "access_key": "AKIAIOSFODNN7EXAMPLE",
+  "secret_key": "wJalrXUtnFEMI/K7MDENG...",
+  "is_default": true,
+  "storage_limit_gb": 500
+}
+```
+
+### Update/Delete Provider
+- `PUT /storage/providers/{id}` - Update provider
+- `DELETE /storage/providers/{id}` - Delete provider (Super Admin)
+
+### Test Connection
+**Endpoint**: `POST /storage/providers/{id}/test`
+**Auth**: Bearer Token (Super Admin)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Connection successful",
+  "available_space_gb": null
+}
+```
+
+### Node Storage Config
+**Endpoint**: `GET /nodes/storage-config`
+**Auth**: X-API-KEY (Node)
+
+Returns decrypted storage credentials for backup operations.
+
+### Provider Types
+| Type | Description |
+|------|-------------|
+| `s3` | AWS S3 or S3-compatible |
+| `b2` | Backblaze B2 |
+| `mega` | Mega.nz |
+| `local` | Local filesystem |
+
+---
+
 ## Statistics Endpoints
 
 ### Report Node Stats
