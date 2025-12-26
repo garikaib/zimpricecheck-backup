@@ -262,6 +262,63 @@ All actions are automatically logged with IP address (Cloudflare-aware), user ag
 
 ---
 
+## Settings Endpoints
+
+### List Settings
+**Endpoint**: `GET /settings/`
+**Auth**: Bearer Token (Super Admin only)
+
+**Response:**
+```json
+{
+  "settings": [
+    {
+      "key": "turnstile_secret",
+      "value": "0x4AAA...",
+      "description": "Cloudflare Turnstile Secret Key",
+      "updated_at": "2025-12-26T05:00:00"
+    }
+  ]
+}
+```
+
+### Get Setting
+**Endpoint**: `GET /settings/{key}`
+**Auth**: Bearer Token (Super Admin only)
+
+### Update Setting
+**Endpoint**: `PUT /settings/{key}`
+**Auth**: Bearer Token (Super Admin only)
+
+**Body:**
+```json
+{
+  "value": "new_value",
+  "description": "Optional description"
+}
+```
+
+### Get Turnstile Site Key (Public)
+**Endpoint**: `GET /settings/public/turnstile-site-key`
+**Auth**: None (Public)
+
+**Response:**
+```json
+{
+  "site_key": "0x4AAAAAACJHWhQujsonWxQ-",
+  "enabled": false
+}
+```
+
+### Turnstile Settings
+| Key | Description |
+|-----|-------------|
+| `turnstile_secret` | Cloudflare Turnstile Secret Key |
+| `turnstile_site_key` | Cloudflare Turnstile Site Key |
+| `turnstile_enabled` | `"true"` or `"false"` to enable/disable |
+
+---
+
 ## Statistics Endpoints
 
 ### Report Node Stats
