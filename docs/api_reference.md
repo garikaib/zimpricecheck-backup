@@ -779,3 +779,128 @@ Returns decrypted storage credentials for backup operations.
 *   `super_admin`: Full access to all users, nodes, and sites.
 *   `node_admin`: Can manage nodes and Site Admins assigned to their nodes.
 *   `site_admin`: Can only view own profile via `/users/me`.
+
+---
+
+## WordPress Site Detection
+
+### Scan for Sites
+**Endpoint**: `GET /daemon/scan`
+**Auth**: Bearer Token (Super Admin)
+**Query Params**: `base_path` (default: `/var/www`)
+
+Scans for WordPress installations by looking for `wp-content/` and `wp-config.php`.
+
+**Response:**
+```json
+{
+  "success": true,
+  "sites": [
+    {
+      "name": "example.com",
+      "path": "/var/www/example.com/htdocs",
+      "has_wp_config": true,
+      "has_wp_content": true,
+      "db_name": "wp_example",
+      "db_user": "dbuser",
+      "db_host": "localhost",
+      "table_prefix": "wp_",
+      "is_complete": true
+    }
+  ],
+  "total": 1,
+  "scanned_path": "/var/www"
+}
+```
+
+### Import Discovered Site
+**Endpoint**: `POST /sites/import`
+**Auth**: Bearer Token (Super Admin)
+**Query Params**: `name`, `wp_path`, `db_name` (optional), `node_id` (optional)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Site 'example.com' imported successfully",
+  "site": {
+    "id": 1,
+    "name": "example.com",
+    "wp_path": "/var/www/example.com/htdocs",
+    "node_id": 1
+  }
+}
+```
+
+---
+
+## Backup Control
+
+### Start Backup
+**Endpoint**: `POST /sites/{site_id}/backup/start`
+**Auth**: Bearer Token (Node Admin+)
+**Query Params**: `simulate` (default: `true`) - Use `false` for real backups
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Backup started for example.com",
+  "status": "running"
+}
+```
+
+### Stop Backup
+**Endpoint**: `POST /sites/{site_id}/backup/stop`
+**Auth**: Bearer Token (Node Admin+)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Backup stop requested",
+  "status": "stopped"
+}
+```
+
+### Get Backup Status
+**Endpoint**: `GET /sites/{site_id}/backup/status`
+**Auth**: Bearer Token (Any authenticated)
+
+Poll this endpoint to track backup progress.
+
+**Response:**
+```json
+{
+  "site_id": 1,
+  "site_name": "example.com",
+  "status": "running",
+  "progress": 60,
+  "message": "Backing up files",
+  "error": null,
+  "started_at": "2025-12-26T10:30:58.089482"
+}
+```
+
+**Status Values:**
+| Status | Description |
+|--------|-------------|
+| `idle` | No backup running |
+| `running` | Backup in progress |
+| `completed` | Backup finished successfully |
+| `failed` | Backup failed (check `error`) |
+| `stopped` | Backup stopped by user |
+
+### Daemon Health
+**Endpoint**: `GET /daemon/health`
+**Auth**: None (Public)
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "backup_status": "idle",
+  "timestamp": "2025-12-26T10:30:00.000000"
+}
+```
+
