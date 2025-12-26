@@ -73,22 +73,8 @@ if [ ! -d "venv" ]; then python3 -m venv venv; fi
 ./venv/bin/pip install --upgrade pip -q
 ./venv/bin/pip install -r requirements.txt -q
 
-chmod +x run.sh configure.sh lib/*.py 2>/dev/null || true
-
-echo "[*] Resetting logs database..."
-rm -f backups.db
-
-echo "[*] Running configuration..."
-./venv/bin/python3 lib/configure.py --systemd
-
-echo "[*] Installing services..."
-if [ -d "systemd" ]; then
-    sudo cp systemd/*.service /etc/systemd/system/ 2>/dev/null || true
-    sudo cp systemd/*.timer /etc/systemd/system/ 2>/dev/null || true
-    sudo systemctl daemon-reload
-    sudo systemctl enable wordpress-backup.timer wordpress-report.timer 2>/dev/null || true
-    sudo systemctl start wordpress-backup.timer wordpress-report.timer 2>/dev/null || true
-fi
+echo "[*] Node mode: Ready for daemon startup"
+echo "[*] Configure via master API and run: python -m daemon.main --mode node"
 
 sudo mkdir -p "$INSTALL_DIR/backups" /var/tmp/wp-backup-work
 sudo rm -f /var/tmp/wp-backup.pid /var/tmp/wp-backup.status
@@ -137,11 +123,7 @@ if [ ! -d "venv" ]; then python3 -m venv venv; fi
 echo "[*] Initializing Database..."
 PYTHONPATH=. ./venv/bin/python3 master/init_db.py
 
-echo "[*] Verifying Super Admins..."
-./venv/bin/python3 lib/configure.py --add-admin <<EOF
-3
-EOF
-# Note: The above runs add-admin interactively but instantly exits (Option 2) to trigger the list_admins() print.
+echo "[*] Super Admin: admin@example.com (created during init)"
 
 echo "[*] Creating Systemd Service..."
 cat > wordpress-master.service <<EOF
