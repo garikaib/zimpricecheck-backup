@@ -12,7 +12,13 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 
+
 from daemon.scanner import scan_for_wordpress_sites, site_to_dict, verify_wordpress_site
+from master import schemas
+from master.api import deps
+from master.db import models
+from sqlalchemy.orm import Session
+from fastapi import Depends
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +60,10 @@ class VerifySiteRequest(BaseModel):
 # ============== Scan Endpoints ==============
 
 @router.get("/scan")
-async def scan_sites(base_path: str = "/var/www"):
+async def scan_sites(
+    base_path: str = "/var/www",
+    db: Session = Depends(deps.get_db)
+):
     """
     Scan for WordPress sites in the given base path.
     Returns list of discovered sites.
@@ -71,9 +80,19 @@ async def scan_sites(base_path: str = "/var/www"):
         
         _backup_state["status"] = "idle"
         _backup_state["message"] = f"Found {len(sites)} WordPress sites"
+        _backup_state["status"] = "idle"
+        _backup_state["message"] = f"Found {len(sites)} WordPress sites"
+        
+        # Determine Node ID (Default to Master/First Node for this hybrid setup)
+        # In a real agent, this would be config based.
+        node_id = None
+        node = db.query(models.Node).first()
+        if node:
+            node_id = node.id
         
         return {
             "success": True,
+            "node_id": node_id,
             "sites": result,
             "total": len(result),
             "scanned_path": base_path,

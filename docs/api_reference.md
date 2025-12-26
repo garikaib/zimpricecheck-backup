@@ -795,6 +795,7 @@ Scans for WordPress installations by looking for `wp-content/` and `wp-config.ph
 ```json
 {
   "success": true,
+  "node_id": 1,
   "sites": [
     {
       "name": "example.com",
