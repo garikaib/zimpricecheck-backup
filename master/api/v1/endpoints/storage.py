@@ -49,21 +49,49 @@ def get_storage_summary(
     Get storage summary across all nodes.
     Node Admins see only their nodes, Super Admins see all.
     """
-    # Get nodes based on role
-    if current_user.role == models.UserRole.SUPER_ADMIN:
-        nodes = db.query(models.Node).filter(models.Node.status == models.NodeStatus.ACTIVE).all()
-    else:
-        nodes = [n for n in current_user.nodes if n.status == models.NodeStatus.ACTIVE]
+    # 1. Determine eligible nodes based on role
+    node_query = db.query(models.Node)
+    if current_user.role != models.UserRole.SUPER_ADMIN:
+        node_query = node_query.filter(models.Node.admin_id == current_user.id)
     
-    # Calculate totals
+    nodes = node_query.filter(models.Node.status == models.NodeStatus.ACTIVE).all()
+    node_ids = [n.id for n in nodes]
+    
+    # 2. Calculate Total Quota
     total_quota_gb = sum(n.storage_quota_gb for n in nodes)
     
-    # Calculate used storage from sites
+    # 3. Calculate Usage Stats via Aggregation
+    # Group by Node
+    node_usage_stats = db.query(
+        models.Site.node_id,
+        func.sum(models.Backup.size_bytes).label("total_bytes")
+    ).join(models.Backup).filter(
+        models.Site.node_id.in_(node_ids) if node_ids else False
+    ).group_by(models.Site.node_id).all()
+    
+    node_usage_map = {stat.node_id: stat.total_bytes or 0 for stat in node_usage_stats}
+    
+    # Group by Provider (Super Admin only for detailed provider view, but totals needed for all)
+    # Note: We calculate provider stats globally for the providers view, 
+    # but strictly speaking user should only see what they manage? 
+    # Usually users see generic "Storage Used" but simplified. 
+    # For now, we return full provider stats for Super Admin, and empty/filtered for others?
+    # Schema requires list of providers.
+    
+    provider_usage_map = {}
+    if current_user.role == models.UserRole.SUPER_ADMIN:
+        provider_stats = db.query(
+            models.Backup.provider_id,
+            func.sum(models.Backup.size_bytes).label("total_bytes")
+        ).group_by(models.Backup.provider_id).all()
+        provider_usage_map = {stat.provider_id: stat.total_bytes or 0 for stat in provider_stats}
+
+    # 4. Build Nodes Summary
     nodes_summary = []
     total_used_gb = 0.0
     
     for node in nodes:
-        used_bytes = sum(s.storage_used_bytes or 0 for s in node.sites)
+        used_bytes = node_usage_map.get(node.id, 0)
         used_gb = round(used_bytes / (1024**3), 2)
         total_used_gb += used_gb
         
@@ -77,12 +105,17 @@ def get_storage_summary(
             "status": node.status.value if hasattr(node.status, 'value') else str(node.status),
         })
     
-    # Get storage providers (Super Admin only sees details)
-    providers = []
+    # 5. Build Providers Summary (Super Admin)
+    providers_response = []
     if current_user.role == models.UserRole.SUPER_ADMIN:
-        db_providers = db.query(models.StorageProvider).filter(models.StorageProvider.is_active == True).all()
-        providers = [_provider_to_response(p) for p in db_providers]
-    
+        all_providers = db.query(models.StorageProvider).filter(models.StorageProvider.is_active == True).all()
+        for p in all_providers:
+            p_used_bytes = provider_usage_map.get(p.id, 0)
+            # Update the provider object temporarily or create response dict
+            p_dict = _provider_to_response(p)
+            p_dict["used_gb"] = round(p_used_bytes / (1024**3), 2)
+            providers_response.append(p_dict)
+
     total_available_gb = round(total_quota_gb - total_used_gb, 2)
     usage_percentage = round((total_used_gb / total_quota_gb) * 100, 1) if total_quota_gb > 0 else 0
     
@@ -93,7 +126,7 @@ def get_storage_summary(
         "usage_percentage": usage_percentage,
         "nodes_count": len(nodes),
         "nodes_summary": nodes_summary,
-        "storage_providers": providers,
+        "storage_providers": providers_response,
     }
 
 

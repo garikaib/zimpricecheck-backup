@@ -83,6 +83,9 @@ class Backup(Base):
     
     site_id = Column(Integer, ForeignKey("sites.id"))
     site = relationship("Site", back_populates="backups")
+    
+    provider_id = Column(Integer, ForeignKey("storage_providers.id"), nullable=True)
+    provider = relationship("StorageProvider", back_populates="backups")
 
 class NodeStats(Base):
     __tablename__ = "node_stats"
@@ -161,3 +164,5 @@ class StorageProvider(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    backups = relationship("Backup", back_populates="provider")
