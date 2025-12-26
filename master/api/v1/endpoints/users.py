@@ -234,6 +234,10 @@ def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Users cannot change their own role (prevents self-downgrade)
+    if user.id == current_user.id and user_in.role is not None:
+        raise HTTPException(status_code=403, detail="Cannot change your own role")
+    
     # Permission check for non-super admins
     if current_user.role != models.UserRole.SUPER_ADMIN:
         # Node Admin can only update Site Admins on their nodes
