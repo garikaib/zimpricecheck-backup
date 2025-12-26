@@ -116,4 +116,187 @@ def read_site(
         "status": site.status or "active",
         "storage_used_gb": round((site.storage_used_bytes or 0) / (1024**3), 2),
         "last_backup": last_backup,
+        "backup_status": site.backup_status,
+        "backup_progress": site.backup_progress,
+        "backup_message": site.backup_message,
     }
+
+
+# ============== Backup Control Endpoints ==============
+
+@router.post("/{site_id}/backup/start")
+async def start_site_backup(
+    site_id: int,
+    simulate: bool = True,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+):
+    """
+    Start a backup for a site.
+    For now, runs locally via daemon API.
+    """
+    site = db.query(models.Site).filter(models.Site.id == site_id).first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Check access
+    if current_user.role == models.UserRole.NODE_ADMIN:
+        if site.node_id not in [n.id for n in current_user.nodes]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Check if already running
+    if site.backup_status == "running":
+        raise HTTPException(status_code=409, detail="Backup already running")
+    
+    # Import and call daemon API directly (same server)
+    try:
+        from daemon.api import start_backup, BackupStartRequest
+        from fastapi import BackgroundTasks
+        
+        # Create a BackgroundTasks instance
+        bg = BackgroundTasks()
+        
+        request = BackupStartRequest(
+            site_path=site.wp_path,
+            site_name=site.name,
+            simulate=simulate,
+        )
+        
+        result = await start_backup(request, bg)
+        
+        # Update site status
+        from datetime import datetime
+        site.backup_status = "running"
+        site.backup_progress = 0
+        site.backup_started_at = datetime.utcnow()
+        site.backup_message = "Backup starting..."
+        site.backup_error = None
+        db.commit()
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{site_id}/backup/stop")
+async def stop_site_backup(
+    site_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+):
+    """Stop a running backup for a site."""
+    site = db.query(models.Site).filter(models.Site.id == site_id).first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    try:
+        from daemon.api import stop_backup
+        result = await stop_backup()
+        
+        site.backup_status = "stopped"
+        site.backup_message = "Backup stopped by user"
+        db.commit()
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{site_id}/backup/status")
+async def get_site_backup_status(
+    site_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_active_user),
+):
+    """Get backup status for a site."""
+    site = db.query(models.Site).filter(models.Site.id == site_id).first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Also get live status from daemon
+    try:
+        from daemon.api import get_backup_status
+        daemon_status = await get_backup_status()
+        
+        # Sync status to site if it's for this site
+        if daemon_status.get("current_site") == site.name:
+            site.backup_status = daemon_status.get("status", "idle")
+            site.backup_progress = daemon_status.get("progress", 0)
+            site.backup_message = daemon_status.get("message")
+            site.backup_error = daemon_status.get("error")
+            db.commit()
+        
+        return {
+            "site_id": site.id,
+            "site_name": site.name,
+            "status": site.backup_status,
+            "progress": site.backup_progress,
+            "message": site.backup_message,
+            "error": site.backup_error,
+            "started_at": site.backup_started_at.isoformat() if site.backup_started_at else None,
+        }
+        
+    except ImportError:
+        # Daemon not available, return DB status
+        return {
+            "site_id": site.id,
+            "site_name": site.name,
+            "status": site.backup_status,
+            "progress": site.backup_progress,
+            "message": site.backup_message,
+            "error": site.backup_error,
+            "started_at": site.backup_started_at.isoformat() if site.backup_started_at else None,
+        }
+
+
+# ============== Site Import from Scan ==============
+
+@router.post("/import")
+async def import_discovered_site(
+    name: str,
+    wp_path: str,
+    db_name: str = None,
+    node_id: int = None,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_superuser),
+):
+    """
+    Import a discovered WordPress site into the system.
+    """
+    # Check if site already exists
+    existing = db.query(models.Site).filter(models.Site.wp_path == wp_path).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Site with this path already exists")
+    
+    # Default to master node if not specified
+    if not node_id:
+        node = db.query(models.Node).first()
+        if node:
+            node_id = node.id
+    
+    site = models.Site(
+        name=name,
+        wp_path=wp_path,
+        db_name=db_name,
+        node_id=node_id,
+        status="active",
+        backup_status="idle",
+    )
+    
+    db.add(site)
+    db.commit()
+    db.refresh(site)
+    
+    return {
+        "success": True,
+        "message": f"Site '{name}' imported successfully",
+        "site": {
+            "id": site.id,
+            "name": site.name,
+            "wp_path": site.wp_path,
+            "node_id": site.node_id,
+        }
+    }
+

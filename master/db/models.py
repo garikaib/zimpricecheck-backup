@@ -109,6 +109,13 @@ class Site(Base):
     status = Column(String, default="active")  # active, paused, error
     storage_used_bytes = Column(Integer, default=0)
     
+    # Backup status tracking
+    backup_status = Column(String, default="idle")  # idle, running, completed, failed
+    backup_progress = Column(Integer, default=0)
+    backup_started_at = Column(DateTime, nullable=True)
+    backup_message = Column(String, nullable=True)
+    backup_error = Column(String, nullable=True)
+    
     # Belongs to a Node
     node_id = Column(Integer, ForeignKey("nodes.id"))
     node = relationship("Node", back_populates="sites")

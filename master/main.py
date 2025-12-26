@@ -66,6 +66,13 @@ try:
 except ImportError:
     pass  # Daemon module not available
 
+# Import daemon router for scan/backup control
+try:
+    from daemon.api import router as daemon_router
+    app.include_router(daemon_router)
+except ImportError:
+    pass  # Daemon module not available
+
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
