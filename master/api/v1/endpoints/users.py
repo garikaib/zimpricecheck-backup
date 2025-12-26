@@ -152,12 +152,12 @@ async def create_user(
     db.commit()
     db.refresh(user)
     
-    # Build verification URL from request origin
+    # Build login URL from request origin
     base_url = request.headers.get("origin", "https://wp.zimpricecheck.com")
-    verify_url = f"{base_url}/auth/verify?user_id={user.id}"
+    login_url = f"{base_url}/login"
     
     # Send verification email
-    subject, html, text = render_verification_email(verification_code, user.full_name, verify_url)
+    subject, html, text = render_verification_email(verification_code, user.full_name, login_url)
     result = await send_message(
         db=db,
         channel_type=models.ChannelType.EMAIL,

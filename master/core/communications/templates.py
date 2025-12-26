@@ -103,7 +103,7 @@ BASE_TEMPLATE = """
 """
 
 
-def render_verification_email(code: str, user_name: str = None, verify_url: str = None) -> tuple:
+def render_verification_email(code: str, user_name: str = None, login_url: str = None) -> tuple:
     """
     Render email verification template.
     
@@ -113,34 +113,26 @@ def render_verification_email(code: str, user_name: str = None, verify_url: str 
     
     greeting = f"Hi {user_name}," if user_name else "Hi there,"
     
-    # Build the verify button/link section
-    verify_link_html = ""
-    verify_link_text = ""
-    if verify_url:
-        verify_link_html = f"""
-        <p style="text-align: center;">
-            <a href="{verify_url}" class="button">Verify Email</a>
-        </p>
-        <p style="font-size: 14px; color: #6b7280; text-align: center;">
-            Or copy and paste this link into your browser:<br>
-            <a href="{verify_url}" style="color: #2563eb; word-break: break-all;">{verify_url}</a>
-        </p>
-        <p style="text-align: center; color: #6b7280; font-size: 14px;">— OR —</p>
-        """
-        verify_link_text = f"\n\nClick here to verify: {verify_url}\n\n— OR —\n"
+    # Default login URL
+    if not login_url:
+        login_url = "https://wp.zimpricecheck.com/login"
     
     content = f"""
         <h2 style="margin-top: 0;">Email Verification Required</h2>
         <p>{greeting}</p>
         <p>Your account has been created. To complete your registration and access the dashboard, please verify your email address.</p>
-        {verify_link_html}
-        <p>Enter this verification code when prompted:</p>
+        
+        <p style="text-align: center;">
+            <a href="{login_url}" class="button">Go to Login</a>
+        </p>
+        
+        <p>When prompted, enter this verification code:</p>
         <div class="code-box">
             <div class="code">{code}</div>
         </div>
         <p style="font-size: 14px; color: #6b7280;">
-            <strong>How to verify:</strong> Log in with your email and password. 
-            You'll be shown a verification form where you can enter this code.
+            <strong>How to verify:</strong> Go to the login page and sign in with your email and password. 
+            You'll be prompted to enter the verification code above.
         </p>
         <div class="warning">
             ⏱️ This code will expire in 24 hours.
@@ -154,10 +146,12 @@ Email Verification Required
 {greeting}
 
 Your account has been created. To complete your registration and access the dashboard, please verify your email address.
-{verify_link_text}
+
+Go to: {login_url}
+
 Your verification code is: {code}
 
-How to verify: Log in with your email and password. You'll be shown a verification form where you can enter this code.
+How to verify: Go to the login page and sign in with your email and password. You'll be prompted to enter the verification code above.
 
 This code will expire in 24 hours.
 """
