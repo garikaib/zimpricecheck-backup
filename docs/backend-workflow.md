@@ -18,14 +18,14 @@ description: Backend development workflow for WordPress Backup SaaS Master Serve
 
 | Purpose | Path |
 |---------|------|
+| **Daemon Logic** | `daemon/main.py`, `daemon/job_queue.py` |
+| **Backup Modules** | `daemon/modules/base.py`, `daemon/modules/*.py` |
 | **Models** | `master/db/models.py` |
 | **Schemas** | `master/schemas.py` |
 | **Dependencies** | `master/api/deps.py` |
 | **Endpoints** | `master/api/v1/endpoints/*.py` |
 | **Router Registration** | `master/main.py` |
 | **Config** | `master/core/config.py` |
-| **Security** | `master/core/security.py` |
-| **Activity Logger** | `master/core/activity_logger.py` |
 | **Deploy Script** | `deploy.sh` |
 | **API Docs** | `docs/api_reference.md` |
 
@@ -39,16 +39,19 @@ description: Backend development workflow for WordPress Backup SaaS Master Serve
 # Edit files locally
 # Key locations:
 # - New endpoint: master/api/v1/endpoints/<name>.py
-# - Register in: master/main.py
-# - Add schemas: master/schemas.py
+# - New backup module: daemon/modules/<name>.py
+# - Daemon logic: daemon/resource_manager.py, daemon/job_queue.py
 # - Add models: master/db/models.py
 ```
 
 ### 2. Syntax Check
 
 ```bash
-cd /home/garikaib/Documents/source/wordpress-backup/master
-python3 -m py_compile main.py schemas.py db/models.py api/v1/endpoints/<file>.py
+cd /home/garikaib/Documents/source/wordpress-backup
+# Check API
+python3 -m py_compile master/main.py
+# Check Daemon
+python3 -m py_compile daemon/main.py
 ```
 
 ### 3. Deploy to Production
@@ -59,7 +62,7 @@ cd /home/garikaib/Documents/source/wordpress-backup
 ```
 
 The deploy script:
-- Creates bundle of master server files
+- Creates bundle of master server files (including `daemon/` and `master/`)
 - Uploads to `/opt/wordpress-backup` via SSH (port 2200)
 - Clears Python cache
 - Runs database initialization
