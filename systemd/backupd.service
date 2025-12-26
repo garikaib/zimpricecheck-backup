@@ -1,0 +1,22 @@
+[Unit]
+Description=WordPress Backup Daemon (Node)
+After=network.target
+
+[Service]
+# User/Group will be set during installation
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/wordpress-backup
+Environment="BACKUPD_MODE=node"
+# Set these in /etc/default/backupd or override via systemctl edit
+Environment="BACKUPD_MASTER_URL=https://wp.zimpricecheck.com:8081/api/v1"
+Environment="BACKUPD_API_KEY=REPLACE_WITH_YOUR_KEY"
+
+ExecStart=/opt/wordpress-backup/venv/bin/python3 -m daemon.main
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
