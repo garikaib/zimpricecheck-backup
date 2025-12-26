@@ -406,6 +406,70 @@ Returns decrypted storage credentials for backup operations.
 
 ---
 
+
+## Jobs Management Endpoints
+
+### List Available Modules
+**Endpoint**: `GET /jobs/modules`
+**Auth**: `Bearer Token` (Node Admin+)
+
+**Response:**
+```json
+{
+  "modules": ["wordpress", "mongodb"]
+}
+```
+
+### List Jobs
+**Endpoint**: `GET /jobs`
+**Auth**: `Bearer Token` (Node Admin+)
+**Query Params**:
+- `status` (optional): `pending`, `running`, `completed`, `failed`
+- `module` (optional): Filter by module name
+- `limit` (default: 50)
+
+**Response:**
+```json
+{
+  "jobs": [
+    {
+      "id": "uuid-string",
+      "module": "wordpress",
+      "target_id": 1,
+      "target_name": "My Site",
+      "status": "completed",
+      "priority": 0,
+      "progress_percent": 100
+    }
+  ],
+  "total": 1
+}
+```
+
+### Create Job
+**Endpoint**: `POST /jobs`
+**Auth**: `Bearer Token` (Node Admin+)
+
+**Body:**
+```json
+{
+  "module": "wordpress",
+  "target_id": 1,
+  "target_name": "My Site",
+  "priority": 5
+}
+```
+
+### Get Job Details
+**Endpoint**: `GET /jobs/{job_id}`
+**Auth**: `Bearer Token` (Node Admin+)
+
+### Cancel Job
+**Endpoint**: `DELETE /jobs/{job_id}`
+**Auth**: `Bearer Token` (Node Admin+)
+
+---
+
 ## Statistics Endpoints
 
 ### Report Node Stats
