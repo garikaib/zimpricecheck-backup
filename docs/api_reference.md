@@ -232,12 +232,20 @@ All actions are automatically logged with IP address (Cloudflare-aware), user ag
 
 ### List All Logs
 **Endpoint**: `GET /activity-logs/`
-**Auth**: Bearer Token (Super Admin)
+**Auth**: Bearer Token (Node Admin+)
 **Query Params**: `user_id`, `action`, `skip`, `limit`
+
+**Access Control:**
+- **Super Admin**: All logs, all users
+- **Node Admin**: Own logs + Site Admins on their nodes
 
 ### Get User's Logs
 **Endpoint**: `GET /activity-logs/user/{user_id}`
-**Auth**: Bearer Token (Super Admin)
+**Auth**: Bearer Token (Node Admin+)
+
+**Access Control:**
+- **Super Admin**: Any user
+- **Node Admin**: Site Admins on their nodes only
 
 ### Logged Actions
 | Action | Description |
