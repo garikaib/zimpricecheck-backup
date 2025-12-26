@@ -103,7 +103,7 @@ BASE_TEMPLATE = """
 """
 
 
-def render_verification_email(code: str, user_name: str = None) -> tuple:
+def render_verification_email(code: str, user_name: str = None, verify_url: str = None) -> tuple:
     """
     Render email verification template.
     
@@ -113,14 +113,35 @@ def render_verification_email(code: str, user_name: str = None) -> tuple:
     
     greeting = f"Hi {user_name}," if user_name else "Hi there,"
     
+    # Build the verify button/link section
+    verify_link_html = ""
+    verify_link_text = ""
+    if verify_url:
+        verify_link_html = f"""
+        <p style="text-align: center;">
+            <a href="{verify_url}" class="button">Verify Email</a>
+        </p>
+        <p style="font-size: 14px; color: #6b7280; text-align: center;">
+            Or copy and paste this link into your browser:<br>
+            <a href="{verify_url}" style="color: #2563eb; word-break: break-all;">{verify_url}</a>
+        </p>
+        <p style="text-align: center; color: #6b7280; font-size: 14px;">— OR —</p>
+        """
+        verify_link_text = f"\n\nClick here to verify: {verify_url}\n\n— OR —\n"
+    
     content = f"""
-        <h2 style="margin-top: 0;">Email Verification</h2>
+        <h2 style="margin-top: 0;">Email Verification Required</h2>
         <p>{greeting}</p>
-        <p>Please use the following code to verify your email address:</p>
+        <p>Your account has been created. To complete your registration and access the dashboard, please verify your email address.</p>
+        {verify_link_html}
+        <p>Enter this verification code when prompted:</p>
         <div class="code-box">
             <div class="code">{code}</div>
         </div>
-        <p>Enter this code in the verification form to complete your registration.</p>
+        <p style="font-size: 14px; color: #6b7280;">
+            <strong>How to verify:</strong> Log in with your email and password. 
+            You'll be shown a verification form where you can enter this code.
+        </p>
         <div class="warning">
             ⏱️ This code will expire in 24 hours.
         </div>
@@ -128,13 +149,15 @@ def render_verification_email(code: str, user_name: str = None) -> tuple:
     
     html = BASE_TEMPLATE.format(title="Email Verification", content=content)
     text = f"""
-Email Verification
+Email Verification Required
 
 {greeting}
 
+Your account has been created. To complete your registration and access the dashboard, please verify your email address.
+{verify_link_text}
 Your verification code is: {code}
 
-Enter this code in the verification form to complete your registration.
+How to verify: Log in with your email and password. You'll be shown a verification form where you can enter this code.
 
 This code will expire in 24 hours.
 """

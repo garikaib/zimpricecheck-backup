@@ -81,7 +81,16 @@ def login_access_token(
             user=user,
             details={"reason": "email_not_verified"},
         )
-        raise HTTPException(status_code=403, detail="Email not verified. Please check your inbox for the verification code.")
+        # Return structured error with user_id so frontend can show verification form
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "email_not_verified",
+                "message": "Email not verified. Please enter your verification code.",
+                "user_id": user.id,
+                "email": user.email,
+            }
+        )
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
@@ -213,3 +222,50 @@ def login_with_magic_link(
         "access_token": access_token,
         "token_type": "bearer",
     }
+
+
+@router.post("/verify-email", response_model=schemas.VerifyEmailResponse)
+def verify_email_public(
+    request: Request,
+    user_id: int,
+    verify_request: schemas.VerifyEmailRequest,
+    db: Session = Depends(deps.get_db),
+):
+    """
+    Public endpoint for users to verify their email after login attempt.
+    No authentication required - uses user_id from login 403 response.
+    """
+    from datetime import datetime
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.is_verified:
+        return schemas.VerifyEmailResponse(success=True, message="Email already verified")
+    
+    # Check code
+    if not user.email_verification_code:
+        raise HTTPException(status_code=400, detail="No verification code found. Please request a new one.")
+    
+    if user.email_verification_expires and user.email_verification_expires < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
+    
+    if user.email_verification_code.upper() != verify_request.code.upper():
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+    
+    # Mark as verified
+    user.is_verified = True
+    user.email_verification_code = None
+    user.email_verification_expires = None
+    db.commit()
+    
+    logger.info(f"[VERIFY] Email verified for: {user.email}")
+    log_action(
+        action=models.ActionType.PROFILE_UPDATE,
+        user=user,
+        request=request,
+        details={"action": "email_verified"},
+    )
+    
+    return schemas.VerifyEmailResponse(success=True, message="Email verified successfully. You can now log in.")
