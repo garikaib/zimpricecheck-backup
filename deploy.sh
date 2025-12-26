@@ -97,7 +97,7 @@ deploy_master() {
         --exclude='venv' \
         --exclude='./.git' \
         --exclude='master.db' \
-        -c master .env lib | zstd - > bundle.tar.zst
+        -c master daemon .env lib | zstd - > bundle.tar.zst
 
     # Generate Master Setup Script
     cat > remote_setup.sh << 'REMOTE_SCRIPT'
