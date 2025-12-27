@@ -28,6 +28,94 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/daemon", tags=["daemon"])
 
 
+# ============== Backup Cleanup Utilities ==============
+
+import glob
+import tempfile
+import shutil
+
+# Pattern for backup temp directories
+BACKUP_TEMP_PATTERN = "backup_*"
+BACKUP_TEMP_DIR = tempfile.gettempdir()
+
+
+def cleanup_orphaned_backup_dirs(site_id: Optional[int] = None, max_age_hours: int = 24) -> Dict[str, Any]:
+    """
+    Clean up orphaned backup temp directories.
+    
+    Args:
+        site_id: If provided, only clean up dirs for this site
+        max_age_hours: Only clean dirs older than this (0 = all)
+    
+    Returns:
+        Dict with cleanup stats
+    """
+    import time
+    
+    cleaned = []
+    errors = []
+    current_time = time.time()
+    max_age_seconds = max_age_hours * 3600
+    
+    # Build pattern
+    if site_id:
+        pattern = os.path.join(BACKUP_TEMP_DIR, f"backup_{site_id}_*")
+    else:
+        pattern = os.path.join(BACKUP_TEMP_DIR, BACKUP_TEMP_PATTERN)
+    
+    for dir_path in glob.glob(pattern):
+        try:
+            if os.path.isdir(dir_path):
+                # Check age
+                dir_mtime = os.path.getmtime(dir_path)
+                age_seconds = current_time - dir_mtime
+                
+                if max_age_hours == 0 or age_seconds > max_age_seconds:
+                    size = sum(
+                        os.path.getsize(os.path.join(dp, f))
+                        for dp, _, files in os.walk(dir_path)
+                        for f in files
+                    )
+                    shutil.rmtree(dir_path)
+                    cleaned.append({
+                        "path": dir_path,
+                        "size_bytes": size,
+                        "age_hours": round(age_seconds / 3600, 1),
+                    })
+                    logger.info(f"Cleaned up orphaned backup dir: {dir_path} ({size} bytes)")
+        except Exception as e:
+            errors.append({"path": dir_path, "error": str(e)})
+            logger.warning(f"Failed to clean up {dir_path}: {e}")
+    
+    total_freed = sum(d["size_bytes"] for d in cleaned)
+    
+    return {
+        "cleaned_count": len(cleaned),
+        "cleaned_dirs": cleaned,
+        "total_freed_bytes": total_freed,
+        "total_freed_mb": round(total_freed / 1024 / 1024, 2),
+        "errors": errors,
+    }
+
+
+def cleanup_on_startup():
+    """Clean up orphaned backup directories on server startup."""
+    logger.info("Running startup cleanup for orphaned backup directories...")
+    result = cleanup_orphaned_backup_dirs(max_age_hours=0)  # Clean all
+    if result["cleaned_count"] > 0:
+        logger.info(f"Startup cleanup: removed {result['cleaned_count']} dirs, freed {result['total_freed_mb']} MB")
+    else:
+        logger.info("Startup cleanup: no orphaned backup directories found")
+    return result
+
+
+# Run cleanup on module load (server startup)
+try:
+    cleanup_on_startup()
+except Exception as e:
+    logger.warning(f"Startup cleanup failed: {e}")
+
+
 class ScanRequest(BaseModel):
     base_path: str = "/var/www"
 
@@ -230,6 +318,15 @@ async def _run_real_backup(site_id: int, site_path: str, site_name: str):
         
     except Exception as e:
         logger.exception(f"Backup failed for site {site_id}: {e}")
+        
+        # Clean up temp files on failure
+        try:
+            cleanup_result = cleanup_orphaned_backup_dirs(site_id=site_id, max_age_hours=0)
+            if cleanup_result["cleaned_count"] > 0:
+                logger.info(f"Cleaned up {cleanup_result['cleaned_count']} temp dirs after failed backup, freed {cleanup_result['total_freed_mb']} MB")
+        except Exception as cleanup_error:
+            logger.warning(f"Failed to clean up after backup failure: {cleanup_error}")
+        
         try:
             site = db.query(models.Site).filter(models.Site.id == site_id).first()
             if site:
@@ -349,10 +446,13 @@ async def reset_backup_status(
     site_id: int,
     db: Session = Depends(deps.get_db),
 ):
-    """Reset a stuck backup status to idle."""
+    """Reset a stuck backup status to idle and clean up temp files."""
     site = db.query(models.Site).filter(models.Site.id == site_id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Clean up any orphaned temp directories for this site
+    cleanup_result = cleanup_orphaned_backup_dirs(site_id=site_id, max_age_hours=0)
     
     site.backup_status = "idle"
     site.backup_progress = 0
@@ -360,9 +460,15 @@ async def reset_backup_status(
     site.backup_error = None
     db.commit()
     
+    logger.info(f"Backup reset for {site.name}: cleaned {cleanup_result['cleaned_count']} temp dirs, freed {cleanup_result['total_freed_mb']} MB")
+    
     return {
         "success": True,
         "message": f"Backup status reset to idle for {site.name}",
+        "cleanup": {
+            "dirs_removed": cleanup_result["cleaned_count"],
+            "space_freed_mb": cleanup_result["total_freed_mb"],
+        }
     }
 
 
@@ -380,6 +486,29 @@ async def daemon_health(db: Session = Depends(deps.get_db)):
         "timestamp": datetime.utcnow().isoformat(),
     }
 
+
+@router.post("/backup/cleanup")
+async def cleanup_backup_temps(
+    max_age_hours: int = Query(default=24, ge=0, description="Only clean dirs older than this (0 = all)"),
+    current_user: models.User = Depends(deps.get_current_superuser),
+):
+    """
+    Manually clean up orphaned backup temp directories.
+    
+    Use max_age_hours=0 to clean ALL backup temp dirs.
+    """
+    result = cleanup_orphaned_backup_dirs(max_age_hours=max_age_hours)
+    
+    logger.info(f"Manual cleanup by {current_user.email}: removed {result['cleaned_count']} dirs, freed {result['total_freed_mb']} MB")
+    
+    return {
+        "success": True,
+        "message": f"Cleaned up {result['cleaned_count']} orphaned backup directories",
+        "cleaned_count": result["cleaned_count"],
+        "space_freed_mb": result["total_freed_mb"],
+        "space_freed_bytes": result["total_freed_bytes"],
+        "errors": result["errors"] if result["errors"] else None,
+    }
 
 @router.get("/backup/stream/{site_id}")
 async def stream_backup_progress(

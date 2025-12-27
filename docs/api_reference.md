@@ -1323,6 +1323,31 @@ source.onmessage = (event) => {
 
 ---
 
+---
+
+## Backup Cleanup
+
+### Manual Cleanup
+**Endpoint**: `POST /daemon/backup/cleanup`
+**Auth**: Bearer Token (Super Admin only)
+**Query Params**: `max_age_hours` (int, default: 24) - Clean dirs older than this. Use 0 for all.
+
+Manually clean up orphaned backup temporary directories to free up disk space.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Cleaned up 5 orphaned backup directories",
+  "cleaned_count": 5,
+  "space_freed_mb": 150.5,
+  "space_freed_bytes": 157810688,
+  "errors": null
+}
+```
+
+---
+
 ## Backup Progress Streaming
 
 ### Stream Backup Progress
