@@ -1,48 +1,39 @@
 # Managing Sites
 
-All WordPress sites are configured in `config.json`.
+Sites are the core entities of the backup system.
 
-## Configuration Format
+## Detection Workflow
 
-Sites are defined in the `sites` array.
+1.  **Auto-Detection**: The Daemon scans `/var/www` (or other configured paths) for `wp-config.php` files.
+2.  **Registration**: Found sites are sent to the Master API (`POST /sites/scan`).
+3.  **Approval/Visibility**: Sites appear in the Dashboard.
+4.  **Activation**: Sites are by default active once detected, unless explicitly excluded.
+
+## Manual Configuration (Optional)
+
+In rare cases where auto-detection fails (e.g., non-standard paths), you can enforce site inclusion via `config.json` on the Node.
 
 ```json
 {
   "sites": [
     {
-      "name": "example-site",
-      "wp_config_path": "/var/www/example.com/wp-config.php",
-      "wp_content_path": "/var/www/example.com/htdocs/wp-content",
-      "db_host": "localhost",
-      "db_name": "example_db",
-      "db_user": "db_user",
-      "db_password": "secret_password"
+      "name": "custom-wp",
+      "wp_path": "/opt/custom-apps/wordpress"
     }
   ]
 }
 ```
 
-### Auto-Detection
+## Database Credentials
 
-The system can automatically detect sites in `/var/www/` and populate `config.json`.
+The system parses `wp-config.php` to find database credentials. It supports:
+- Standard `DB_NAME`, `DB_USER`, `DB_PASSWORD` definitions.
+- Variable interpolation (basic).
 
-```bash
-# Run wizard to detect
-./configure.sh --detect
-```
+If your config is highly dynamic (e.g., fetches secrets from environment variables at runtime), you may need to supply credentials manually in `config.json` or ensure the daemon runs with those environment variables set.
 
-### Manual Configuration
+## Exclusions
 
-You can also edit `config.json` manually or use the wizard:
-
-```bash
-./configure.sh --sites
-```
-
-### Database Credentials
-
-If `db_name`, `db_user`, and `db_password` are left empty (or set to `""`), the system will verify it can extract them from `wp-config.php` automatically. This is the recommended and most secure method.
-
-Only fill these fields if:
-- Your `wp-config.php` uses complex logic/variables for DB credentials that regex cannot parse.
-- You are using an external database not defined in `wp-config.php`.
+To prevent a detected site from being backed up:
+1.  **Preferred**: Disable it in the Master Dashboard.
+2.  **Local**: Add `"skip": true` to `config.json` for that site.

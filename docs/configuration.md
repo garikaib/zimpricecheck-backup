@@ -1,91 +1,81 @@
 # Configuration Reference
 
-The system relies on two distinct configuration files for different purposes.
+The SaaS Platform divides configuration between **Deployment/Infrastructure** (local) and **Business Logic** (remote/centralized).
 
-## 1. System Config: `.env`
+## 1. Local Infrastructure: `.env`
 
-The `.env` file handles **Deployment Targets**, **Credentials**, and **Global Settings**. It is NOT version controlled.
+The `.env` file handles **Deployment Targets**, **Server Identity**, and **Connection Strings**. It is machine-specific and NOT version controlled.
 
-**Management**: Use `./configure.sh` (Main Menu) or edit manually.
+**Management**: Use `./configure.sh` or edit manually.
 
 | Category | Variable | Description |
 |---|---|---|
 | **Deployment** | `REMOTE_HOST` | Target VPS IP or Domain |
 | | `REMOTE_USER` | SSH Username (default: `ubuntu`) |
-| | `REMOTE_DIR` | Installation path |
-| **Identity** | `SERVER_ID` | Unique ID for this server instance (e.g., hostname) |
-| **Master** | `MASTER_URL` | URL of Master Server (Node Mode only) |
-| | `NODE_API_KEY` | Auto-generated key (Node Mode only) |
-| **Notifications** | `SMTP_SERVER` | SMTP Hostname |
-| | `SMTP_USER` | SMTP Username |
-| | `SMTP_PASSWORD` | SMTP Password |
-| **Cloudflare** | `CLOUDFLARE_ACCOUNT_ID` | D1 Logging Account ID |
-| | `CLOUDFLARE_API_TOKEN` | D1 API Token |
+| | `REMOTE_PORT` | SSH Port (default: `22`) |
+| | `REMOTE_DIR` | Installation path (default: `/opt/wordpress-backup`) |
+| **Mode** | `MODE` | `master` or `node` |
+| **Master (Node Mode)** | `MASTER_URL` | URL of Master Server API |
+| | `NODE_API_KEY` | Auto-generated key for auth |
+| **Master (Master Mode)** | `SECRET_KEY` | JWT Signing Key |
+| | `POSTGRES_USER` | DB User |
+| | `POSTGRES_PASSWORD` | DB Password |
+| **Notifications** | `SENDPULSE_ID` | SendPulse API ID |
+| | `SENDPULSE_SECRET` | SendPulse Secret |
+| **Cloudflare** | `CLOUDFLARE_D1_TOKEN` | (Optional) Legacy logging |
 
 ---
 
-## 2. Backup Config: `config.json`
+## 2. Site Configuration
 
-The `config.json` file handles **Site Definitions** and **S3 Storage Destinations**. It IS designed to be portable/shared if needed.
+In **Node Mode**, the agent automatically detects WordPress sites in `/var/www/`.
 
-**Management**: Use `./configure.sh` (Sub-menus) or edit manually.
+- **Auto-Detection**: Scans for `wp-config.php`.
+- **Registration**: Registers sites with the Master API.
+- **Filtering**: Can be constrained by `config.json` (optional).
 
-### A. Sites Array
-Defines the WordPress installations to back up.
-*See [Managing Sites](sites.md) for details.*
+### `config.json` (Optional/Advanced)
+
+Used primarily to *exclude* sites or override specific paths if auto-detection fails.
 
 ```json
 {
   "sites": [
     {
-      "name": "my-blog",
-      "wp_config_path": "/var/www/html/wp-config.php",
-      "wp_content_path": "/var/www/html/wp-content",
-      "db_name": "wp_db" // Optional overrides
+      "name": "special-site",
+      "wp_path": "/custom/path/to/site",
+      "skip": false
     }
   ]
 }
 ```
 
-### B. Storage Array
-Defines S3-compatible destinations with failover priority.
-*See [S3 Storage](s3-storage.md) for details.*
+---
 
-```json
-{
-  "storage": [
-    {
-      "name": "primary-storage",
-      "type": "s3",
-      "endpoint": "t5k4.ldn.idrivee2-61.com",
-      "bucket": "backups-bucket",
-      "weight": 100
-    },
-    {
-      "name": "fallback-storage",
-      "type": "s3",
-      "endpoint": "s3.amazonaws.com",
-      "bucket": "emergency-bucket",
-      "weight": 50
-    }
-  ]
-}
-```
+## 3. Storage Configuration
 
-## 3. Setup Wizard
+**Managed centrally via the Master API.**
 
-The `./configure.sh` script is the primary tool for managing both files interactively.
+See [S3 Storage](s3-storage.md) for details on how to configure providers.
+
+The local `config.json` `storage` section is **deprecated** and ignored in Node Mode.
+
+---
+
+## 4. Setup Scripts
+
+### `deploy.sh`
+
+The primary tool for deploying code to remote servers.
 
 ```bash
-# Main Wizard (Manage .env, Email, D1)
+./deploy.sh [node|master] [--test]
+```
+
+### `configure.sh`
+
+Helper to generate `.env` files.
+
+```bash
 ./configure.sh
-
-# Site Detection (Populates config.json)
-./configure.sh --detect
-
-# Admin Management (Master Server Only)
-./configure.sh --add-admin
-
-# Validation
-./configure.sh --validate
 ```

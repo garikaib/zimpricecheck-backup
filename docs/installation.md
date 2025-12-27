@@ -1,81 +1,54 @@
 # Installation Guide
 
-## Requirements
+The platform is designed to be deployed via the `deploy.sh` script.
 
-- **Ubuntu Server** 22.04+ (other Linux distros may work)
-- **Python 3.10+**
-- **MariaDB/MySQL** client tools (`mysqldump`)
-- **zstd** compression utility
+## Quick Start
 
-## Local Setup
+### 1. Prerequisites
+- **Controller Machine**: Linux/macOS with SSH access to targets.
+- **Target Servers**: Ubuntu 22.04+ (Fresh install recommended).
 
-### 1. Clone Repository
-
+### 2. Clone Repo
 ```bash
-git clone https://github.com/garikaib/zimpricecheck-backup.git
+git clone <repo_url>
 cd wordpress-backup
 ```
 
-### 2. Create Virtual Environment
+### 3. Deploy Master Server
+This hosts the API, Database, and Dashboard.
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+# Configure environment
+cp .env.example .env
+nano .env  # Set POSTGRES_PASSWORD, SECRET_KEY, etc.
+
+# Deploy
+./deploy.sh master
 ```
 
-### 3. Run Configuration Wizard
+**Verify:**
+Visit `https://<master-ip>:8081` (API Docs) or `https://<master-ip>:8000`.
+
+### 4. Deploy Node Agent
+This runs on the VPS hosting the WordPress sites.
 
 ```bash
-./configure.sh
+# Edit .env to point to Master
+nano .env
+# Set:
+# MODE=node
+# MASTER_URL=https://<master-ip>:8001
+# REMOTE_HOST=<node-ip>
+
+# Deploy
+./deploy.sh node
 ```
 
-This launches an interactive menu to configure:
-- WordPress sites
-- S3 storage credentials
-- SMTP email settings
-- Cloudflare D1 sync
-- Deployment target
+**Post-Deploy:**
+1.  SSH into Node.
+2.  Get the Join Code (displayed in logs or via `daemon.main`).
+3.  Approve Node in Master Dashboard.
 
-### 4. Deploy to Remote Server
+## Manual Setup (Development)
 
-```bash
-./deploy.sh
-```
-
-## Remote Server Requirements
-
-The deploy script will automatically:
-- Create `/opt/wordpress-backup` directory
-- Set up Python virtual environment
-- Install dependencies (including `boto3` for S3)
-- Reset logs database for fresh start
-- Configure systemd timers
-
-## First Run
-
-After deployment, verify the installation:
-
-```bash
-# Check timer status
-systemctl status wordpress-backup.timer
-
-# Run a test backup
-cd /opt/wordpress-backup
-./run.sh -f
-```
-
-## Updating
-
-To update an existing installation:
-
-```bash
-# Locally
-git pull
-./deploy.sh
-```
-
-The deploy script preserves your `.env` and `sites.json` configurations.
-
-> [!NOTE]
-> Each deployment resets the `backups.db` log database. Historical data in Cloudflare D1 is preserved.
+See [Deployment Details](deployment.md) for advanced configurations.

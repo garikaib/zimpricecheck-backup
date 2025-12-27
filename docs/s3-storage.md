@@ -1,86 +1,75 @@
-# S3 Storage Configuration
+# Storage Providers & S3
 
-The system supports **unlimited** S3-compatible storage servers (AWS S3, iDrive E2, Backblaze B2, DigitalOcean Spaces, MinIO, etc.).
+The SaaS platform uses a **Centralized Storage Architecture**. Storage Providers are configured on the Master Server and shared across Nodes (or assigned to specific Nodes/Tenants in future, currently global default).
 
-Configuration is managed in `config.json`.
+## key Concepts
 
-## Configuration Format
+1.  **Centralized Configuration**: Managed via Master API, not local `config.json`.
+2.  **Encryption**: Access Keys and Secret Keys are stored **encrypted** in the database using `Fernet` (symmetric encryption).
+3.  **Dynamic Provisioning**: Nodes request storage credentials from the Master only when needed (Zero Trust principle).
+4.  **Reconciliation**: The Master periodically checks S3 buckets to sync usage data with the database (Drift Detection).
 
-Servers are defined in the `storage` array. Each server has a `weight` that determines priority (higher = tried first).
+## Supported Providers
 
-```json
+Any S3-compatible provider is supported:
+- **iDrive E2** (Recommended/Default)
+- **AWS S3**
+- **Backblaze B2**
+- **DigitalOcean Spaces**
+- **MinIO** (Self-hosted)
+
+## Managing Providers
+
+Providers are managed by **Super Admins** via the API.
+
+### 1. Create a Provider
+
+```bash
+POST /api/v1/storage/providers
 {
-  "storage": [
-    {
-      "name": "idrive-primary",
-      "type": "s3",
-      "endpoint": "t5k4.ldn.idrivee2-61.com",
-      "region": "eu-west-3",
-      "access_key": "YOUR_ACCESS_KEY",
-      "secret_key": "YOUR_SECRET_KEY",
-      "bucket": "wordpress-backups",
-      "weight": 100,
-      "storage_limit_gb": 100
-    },
-    {
-      "name": "aws-backup",
-      "type": "s3",
-      "endpoint": "s3.amazonaws.com",
-      "region": "us-east-1",
-      "access_key": "YOUR_AWS_KEY",
-      "secret_key": "YOUR_AWS_SECRET",
-      "bucket": "offsite-archive",
-      "weight": 50,
-      "storage_limit_gb": 500
-    }
-  ]
+  "name": "iDrive E2 Primary",
+  "type": "s3",
+  "endpoint": "t5k4.ldn.idrivee2-61.com",
+  "bucket": "backups-bucket",
+  "region": "eu-west-3",
+  "access_key": "YOUR_ACCESS_KEY",
+  "secret_key": "YOUR_SECRET_KEY",
+  "storage_limit_gb": 1000,
+  "is_default": true
 }
 ```
 
-### Fields
+### 2. Set Default
 
-| Field | Description | Required | Default |
-|-------|-------------|----------|---------|
-| `name` | Friendly name for logs | Yes | - |
-| `type` | Must be `s3` | Yes | `s3` |
-| `endpoint` | S3 API endpoint (no https://) | Yes | - |
-| `region` | Region code | Yes | `us-east-1` |
-| `bucket` | Bucket name | Yes | - |
-| `weight` | Priority (1-100) | No | 100 |
-| `storage_limit_gb` | Max usage before failover | No | 100 |
+Only one provider can be `is_default=true` at a time. Setting a new default automatically unsets the previous one.
 
-## Failover Behavior
+### 3. Usage & Quotas
 
-1. The system sorts all configured servers by **Weight** (Descending).
-2. It checks the first server:
-   - Is it reachable?
-   - Does it have free space (based on `storage_limit_gb`)?
-3. If successful, upload proceeds.
-4. If failed or full, it tries the next server in the list.
-5. If all servers fail, the backup job is marked as `ERROR`.
+Each provider tracks `used_gb` against `storage_limit_gb`.
+- **Soft Limit**: Usage is tracked but uploads aren't Hard-Blocked by the *provider* logic (yet).
+- **Hard Limit**: Nodes check Site/Node quotas before uploading.
 
-## Provider Guides
+### 4. Reconciliation
 
-### iDrive E2
-- **Endpoint**: Find in specific bucket settings (e.g., `t5k4.ldn.idrivee2-61.com`)
-- **Region**: e.g., `eu-west-3` (Paris)
-
-### AWS S3
-- **Endpoint**: `s3.amazonaws.com`
-- **Region**: e.g., `us-east-1`
-
-### Backblaze B2
-- **Endpoint**: `s3.us-west-004.backblazeb2.com`
-- **Region**: `us-west-004` (check local code)
-
-### DigitalOcean Spaces
-- **Endpoint**: `nyc3.digitaloceanspaces.com`
-- **Region**: `nyc3`
-
-## Testing
-
-Run the S3 manager directly to test connectivity to all configured servers:
+To fix discrepancies between the Database and actual S3 usage:
 
 ```bash
-./venv/bin/python3 lib/s3_manager.py
+POST /api/v1/storage/reconcile?dry_run=false
 ```
+
+This scans all active S3 paths known to the DB and updates `storage_used_bytes`.
+
+## Directory Structure (S3)
+
+Backups are stored using opaque UUIDs to prevent enumeration attacks and ensure uniqueness:
+
+```
+s3://<bucket>/<node_uuid>/<site_uuid>/<filename>.tar.zst
+```
+
+Example:
+`s3://backups/3d298266-633b-48b6-9662-07a1d9ee1c44/a840cad8-9322-4ed1-a2ea-f65b1b14afa7/site.com_20251227_082133.tar.zst`
+
+## Legacy Config (Deprecated)
+
+The local `config.json` `storage` array is **deprecated** and ignored in Node Mode. It is only used for `standalone` local testing if explicitly invoked.

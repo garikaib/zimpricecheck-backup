@@ -1,133 +1,75 @@
-# Backup Operations
+# Backup Flow & Operations
 
-The `run.sh` script controls backup execution.
+Automated backup operations are handled by the **Backup Daemon** (`backupd`).
 
-## Usage
+## How it Works
 
-```bash
-./run.sh [OPTIONS]
-```
+1.  **Schedule**: The daemon wakes up according to its internal scheduler (or systemd timer).
+2.  **Job Creation**: A backup "Job" is instantiated for each active site.
+3.  **Quota Check**:
+    - The daemon queries the Master API (`GET /sites/{id}/quota/check`).
+    - If `can_proceed` is `false`, the backup is aborted (SKIPPED).
+4.  **Execution**:
+    - **Database**: `mysqldump` -> `.sql`
+    - **Files**: `tar` of `wp-content` (excluding cache/node_modules) -> `.tar`
+    - **Config**: `wp-config.php` copied.
+5.  **Compression**: All artifacts combined into a single Zstandard archive (`.tar.zst`).
+6.  **Upload**:
+    - Daemon fetches encrypted storage credentials from Master (`GET /nodes/config`).
+    - Decrypts credentials in memory.
+    - Uploads directly to S3 (no relay through Master) to path `/{node_uuid}/{site_uuid}/{filename}`.
+7.  **Reporting**:
+    - On success: Sends `POST /backups/` to Master with metadata (`size_bytes`, `s3_path`).
+    - On failure: Sends error status.
+8.  **Cleanup**: Local temporary files are deleted.
 
-## Command Line Options
+## Manually Triggering Backups
 
-| Flag | Description |
-|------|-------------|
-| (no flags) | Run backup in background |
-| `-f`, `--foreground` | Run backup in foreground (see output) |
-| `--db-sync` | Manually trigger Cloudflare D1 synchronization |
-| `--dry-run` | Simulate backup without making changes |
-| `--check` | Check status of running backup |
+### Via API (Dashboard)
 
-## Examples
-
-### Standard Backup (Background)
-
-```bash
-./run.sh
-```
-Starts backup in background. Email notification sent on completion.
-
-### Foreground Backup (Debug)
-
-```bash
-./run.sh -f
-```
-Runs backup with full output visible. Useful for troubleshooting.
-
-### Manual D1 Sync
+**Preferred Method**
 
 ```bash
-./run.sh --db-sync
+POST /api/v1/sites/{id}/backup/start
 ```
-Forces synchronization between local SQLite and Cloudflare D1.
 
-### Dry Run
+This queues a job on the node (via WebSocket/Command channel, pending implementation of realtime push) or via polling. *Currently, daemon polls for jobs or runs on schedule.*
+
+### Via CLI (On Node)
+
+You can manually trigger the daemon logic for debugging.
 
 ```bash
-./run.sh --dry-run
-```
-Tests configuration without creating actual backups.
+# SSH into Node
+ssh ubuntu@node-ip
 
-## Backup Process
+# Navigate to dir
+cd /opt/wordpress-backup
 
-For each site in `sites.json`:
-
-1. **Database Backup** — `mysqldump` with `--add-drop-table`
-2. **Config Backup** — Copies `wp-config.php`
-3. **Content Archive** — Tars `wp-content` (excludes cache)
-4. **Compression** — Creates `{site}-backup-{timestamp}.tar.zst`
-5. **Upload** — Sends to S3-compatible storage
-6. **Logging** — Records to local DB and D1
-
-## Archive Contents
-
-Each archive contains:
-
-```
-{site}-backup-20241225-053000.tar.zst
-├── database.sql       # Full MySQL dump
-├── wp-config.php      # WordPress configuration
-└── wp-content.tar     # Themes, plugins, uploads
+# Run specific module
+sudo ./venv/bin/python3 -m daemon.main --run-once
 ```
 
-## Archive Naming
+## Archive Format
 
-Format: `{site_name}-backup-{YYYYMMDD}-{HHMMSS}.tar.zst`
+Filename: `{site_name}_{YYYYMMDD}_{HHMMSS}.tar.zst`
 
-Example: `zimpricecheck-backup-20241225-053000.tar.zst`
-
-## S3 Storage Path
-
-Archives are stored in S3 with the structure:
-
+Contents:
 ```
-/{SERVER_ID}/{Year}/{Month}/{Day}/{filename}.tar.zst
-```
-
-Example: `/wp-server-1/2024/12/25/zimpricecheck-backup-20241225-053000.tar.zst`
-
-## Excluded from wp-content
-
-- `cache/`
-- `w3tc-config/`
-- `uploads/cache/`
-- `node_modules/`
-- `.git/`
-- `debug.log`
-
-## Automatic Scheduling
-
-Backups run automatically via systemd timer based on `BACKUP_FREQUENCY`:
-
-| Frequency | Schedule |
-|-----------|----------|
-| `daily` | Once at `BACKUP_TIME` |
-| `twice` | Midnight and noon |
-| `every-6h` | 00:00, 06:00, 12:00, 18:00 |
-| `every-2h` | Every 2 hours |
-
-Check timer status:
-```bash
-systemctl list-timers wordpress-backup.timer
+.
+├── database.sql       # Full SQL Dump
+├── wp-config.php      # Auth keys and DB config
+└── wp-content/        # Themes, Plugins, Uploads
 ```
 
 ## Restore Procedure
 
-```bash
-# 1. Download archive from S3 bucket or local backups/
-
-# 2. Extract
-mkdir restore && cd restore
-zstd -d {site}-backup-{timestamp}.tar.zst
-tar -xf {site}-backup-{timestamp}.tar
-
-# 3. Restore database
-mysql -u user -p database < database.sql
-
-# 4. Restore wp-config.php
-cp wp-config.php /var/www/site.com/
-
-# 5. Restore wp-content
-tar -xf wp-content.tar -C /var/www/site.com/htdocs/
-chown -R www-data:www-data /var/www/site.com/htdocs/wp-content
-```
+1.  **Download**: Get Presigned URL from Dashboard (`GET /backups/{id}/download`).
+2.  **Download to Server**: `wget -O backup.tar.zst "<presigned_url>"`
+3.  **Extract**:
+    ```bash
+    zstd -d backup.tar.zst
+    tar -xf backup.tar
+    ```
+4.  **Import DB**: `mysql -u user -p dbname < database.sql`
+5.  **Restore Files**: `rsync -av wp-content/ /var/www/site/wp-content/`

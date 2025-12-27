@@ -566,18 +566,17 @@ async with resource_manager.acquire_io():
 ## Current Limitations & Future Work
 
 > [!WARNING]
-> The following features are designed but not yet fully implemented:
+> The following features are in development:
 
-1. **Node Mode**: The polling/registration logic in `_run_node()` is stubbed
-2. **Upload Integration**: `_upload_remote()` in WordPress module is placeholder
-3. **Job Resume**: Jobs track stages but can't resume from failure yet
-4. **WebSocket Updates**: Callbacks are ready but no WebSocket endpoint exists
+1. **Job Resume**: Jobs track stages but can't resume from failure yet
+2. **WebSocket Updates**: Callbacks are ready but no WebSocket endpoint exists
+3. **Incremental Backups**: Only full backups are currently supported
 
 ---
 
 ## Roadmap
 
-### Phase 1: Core Stability (Current)
+### Phase 1: Core Stability (Completed)
 - [x] Stage-based backup execution
 - [x] Database dump via mysqldump
 - [x] wp-content file backup
@@ -587,14 +586,13 @@ async with resource_manager.acquire_io():
 - [x] WordPress site scanner
 - [x] Resource manager (I/O and network semaphores)
 
-### Phase 2: Storage Integration (In Progress)
-- [ ] Integrate `_upload_remote()` with S3Manager
-- [ ] Support multiple storage providers per backup
-- [ ] Implement storage rotation/retention policies
-- [ ] Add Cloudflare R2 support
-- [ ] Add local storage fallback
+### Phase 2: Storage Integration (Completed)
+- [x] Integrate `_upload_remote()` with S3Manager
+- [x] Support multiple storage providers per backup
+- [x] Implement storage rotation/retention policies (Quota/Reconciliation)
+- [x] S3 integration via Master API credentials
 
-### Phase 3: Resilience & Monitoring
+### Phase 3: Resilience & Monitoring (In Progress)
 - [ ] Job resumption from failed stage
 - [ ] Atomic file operations for archive creation
 - [ ] Automatic retry with exponential backoff
@@ -602,26 +600,11 @@ async with resource_manager.acquire_io():
 - [ ] Webhook notifications (Slack, Discord)
 - [ ] Prometheus metrics endpoint
 
-### Phase 4: Distributed Mode (Node)
-- [ ] Node registration with Master
-- [ ] Secure API key distribution
-- [ ] Job distribution to nodes
-- [ ] Node health monitoring
-- [ ] Automatic job reassignment on node failure
-
-### Phase 5: Advanced Features
-- [ ] Incremental backups (only changed files)
-- [ ] WebSocket real-time progress updates
-- [ ] Database-only / Files-only backup options
-- [ ] Backup encryption at rest
-- [ ] Scheduled backup windows
-- [ ] Bandwidth scheduling (off-peak uploads)
-
-### Phase 6: Additional Modules
-- [ ] MongoDB backup module
-- [ ] PostgreSQL backup module
-- [ ] Generic file/folder backup module
-- [ ] Docker volume backup module
+### Phase 4: Distributed Mode (Completed)
+- [x] Node registration with Master
+- [x] Secure API key distribution
+- [x] Job distribution to nodes (via Polling/Schedule)
+- [x] Node health monitoring
 
 ---
 

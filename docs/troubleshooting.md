@@ -1,194 +1,94 @@
 # Troubleshooting
 
+## Service Names
+
+| Component | Service Name | Logs |
+|-----------|--------------|------|
+| **Node Agent** | `wordpress-backup-daemon` | `journalctl -u wordpress-backup-daemon` |
+| **Master Server** | `wordpress-master` | `journalctl -u wordpress-master` |
+
 ## Common Issues
 
-### Backup Not Running
-
-**Symptom**: Timer enabled but backups don't execute.
-
-**Check**:
-```bash
-# Timer status
-systemctl status wordpress-backup.timer
-
-# Service logs
-journalctl -u wordpress-backup.service -n 50
-
-# Manual test
-cd /opt/wordpress-backup
-./run.sh -f
-```
-
-**Solutions**:
-- Ensure `sites.json` exists and has sites defined
-- Check Python venv: `./venv/bin/python3 --version`
-- Verify file permissions: `ls -la`
-
----
-
-### "No sites.json found"
-
-**Symptom**: Backup exits immediately with this message.
-
-**Solution**:
-```bash
-./configure.sh --sites
-# Add at least one site
-```
-
----
-
-### Database Backup Failed
-
-**Symptom**: `mysqldump failed` error.
+### 1. Node Not Registering
+**Symptom**: Node deployed but doesn't appear in Master "Pending Nodes".
 
 **Check**:
-```bash
-# Test credentials manually
-mysqldump --host=localhost --user=USER --password=PASS DATABASE > /dev/null
-```
+1. SSH into Node: `ssh ubuntu@<node-ip>`
+2. Check logs: `sudo journalctl -u wordpress-backup-daemon -f`
+   - Should see: `[Scanning] Found X compatible sites`
+   - Should see: `[Registration] Code generated: XXXXX`
 
-**Solutions**:
-- Verify DB credentials in `sites.json`
-- Ensure `mysqldump` is installed: `which mysqldump`
-- Check if database exists
-- Try auto-extraction (leave DB fields blank in site config)
+**Fix**:
+- Ensure `MASTER_URL` in `.env` is correct.
+- Ensure Node can reach Master (firewall/security groups).
+- If "Already registered", check `config.json` for cached UUID.
 
----
-
-### S3 Upload Failed
-
-**Symptom**: Backup created but not uploaded.
+### 2. Backup Fails (Quota Exceeded)
+**Symptom**: Backup job marked as `SKIPPED` or `FAILED` with "Quota Exceeded".
 
 **Check**:
-```bash
-# Test S3 connectivity
-./venv/bin/python3 lib/s3_manager.py
-```
+- Check Master Dashboard > Site > Quota.
+- Run pre-check manually: `curl ... /sites/{id}/quota/check`
 
-**Solutions**:
-- Verify S3 credentials in `.env` (`S3_SERVER_1_*` variables)
-- Check endpoint URL is correct (no `https://` prefix)
-- Ensure bucket exists or will be auto-created
-- Verify network allows outbound HTTPS (port 443)
-- Check storage limit: increase `S3_SERVER_1_STORAGE_LIMIT_GB`
+**Fix**:
+- Delete old backups (`DELETE /backups/{id}`).
+- Increase Site or Node quota (`PUT /sites/{id}/quota`).
+- Clean up S3 manually if drift occurred (then `POST /storage/reconcile`).
 
----
-
-### D1 Sync Failed
-
-**Symptom**: `[D1] Sync failed` or API errors.
+### 3. S3 Upload Failed
+**Symptom**: `ClientError: An error occurred (403)`.
 
 **Check**:
-```bash
-# Test manually
-./venv/bin/python3 lib/d1_manager.py
-```
+- Verify Storage Provider Config on Master.
+- Check if S3 credentials are valid.
+- Check time sync on Node (S3 auth fails if clock skewed): `date`.
 
-**Solutions**:
-- Verify `CLOUDFLARE_*` variables in `.env`
-- Check API token permissions (D1 Edit)
-- Ensure database ID is correct
-- Test network: `curl https://api.cloudflare.com`
+**Fix**:
+- Update credentials in Master Dashboard.
+- `sudo ntpdate pool.ntp.org` on Node.
 
----
-
-### Permission Denied
-
-**Symptom**: Various "Permission denied" errors.
-
-**Solutions**:
-```bash
-# Fix ownership
-sudo chown -R ubuntu:ubuntu /opt/wordpress-backup
-
-# Fix work directory
-sudo chown -R ubuntu:ubuntu /var/tmp/wp-backup-work
-sudo chmod 775 /var/tmp/wp-backup-work
-
-# Fix scripts
-chmod +x run.sh configure.sh deploy.sh
-```
-
----
-
-### Deploy Script Hangs
-
-**Symptom**: `deploy.sh` stalls during upload or setup.
-
-**Solutions**:
-- Check SSH key: `ssh -p PORT user@host`
-- Verify port in `.env`: `REMOTE_PORT`
-- Test connectivity: `ping REMOTE_HOST`
-- Try with verbose: `bash -x deploy.sh`
-
----
-
-### "Another backup is running"
-
-**Symptom**: Script exits saying backup already in progress.
+### 4. 500 Internal Server Error (Master)
+**Symptom**: API returns 500.
 
 **Check**:
-```bash
-# Is it actually running?
-ps aux | grep backup_manager
+- Master logs: `ssh ubuntu@<master-ip> "sudo journalctl -u wordpress-master -n 50"`
+- Search for Python Traceback.
 
-# Check lock file
-ls -la /var/tmp/wp-backup.pid
-cat /var/tmp/wp-backup.pid
-```
+**Fix**:
+- Report bug with traceback.
+- Restart service: `sudo systemctl restart wordpress-master`.
 
-**Solution** (if stale):
-```bash
-rm /var/tmp/wp-backup.pid
-rm /var/tmp/wp-backup.status
-```
-
----
-
-### Email Not Sending
-
-**Symptom**: No email notifications received.
+### 5. "Permission Denied" (Node)
+**Symptom**: Daemon can't read `wp-config.php` or write temp files.
 
 **Check**:
+- Service runs as `root` (usually) or a user with correct groups?
+- Agent runs as root by default to access `/var/www` owned by `www-data`.
+
+**Fix**:
+- Ensure daemon running as root or has `sudo` capability (less secure, but often necessary for `/var/www` access).
+
+## Diagnostic Commands (Node)
+
 ```bash
-# View logs
-journalctl -u wordpress-report.service -n 50
+# Check Daemon Status
+sudo systemctl status wordpress-backup-daemon
+
+# Run Manual Scan
+sudo /opt/wordpress-backup/venv/bin/python3 -m daemon.main --scan
+
+# Run Manual Backup for Site ID 1
+sudo /opt/wordpress-backup/venv/bin/python3 -m daemon.module --backup 1
 ```
 
-**Solutions**:
-- Verify SMTP credentials in `.env`
-- Check SMTP server allows your IP
-- For Gmail: Use App Password, not account password
-- Test: `./venv/bin/python3 lib/report_manager.py`
+## Resetting State
 
----
+If a Node is "stuck" or you want to register it as a new node:
 
-## Viewing Logs
-
-### Systemd Logs
 ```bash
-# Backup service
-journalctl -u wordpress-backup.service -f
-
-# Report service
-journalctl -u wordpress-report.service -f
+# On Node
+sudo systemctl stop wordpress-backup-daemon
+rm /etc/backupd/config.json  # Delete identity
+rm /etc/backupd/uuid         # Delete UUID
+sudo systemctl start wordpress-backup-daemon
 ```
-
-### Database Logs
-```bash
-sqlite3 /opt/wordpress-backup/backups.db \
-  "SELECT * FROM backup_log ORDER BY timestamp DESC LIMIT 20;"
-```
-
-### Timer Schedule
-```bash
-systemctl list-timers --all | grep wordpress
-```
-
-## Getting Help
-
-If issues persist:
-1. Check GitHub Issues
-2. Run backup with `-f` flag for full output
-3. Collect logs: `journalctl -u wordpress-backup.service > debug.log`

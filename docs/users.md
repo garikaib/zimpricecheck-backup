@@ -1,96 +1,36 @@
-# Users API
+# User Management & Roles
 
-User management endpoints with role-based access control.
+For API details, see [Users API Reference](api/users.md).
 
-## Roles
+## Role Hierarchy
 
-| Role | Scope |
-|------|-------|
-| `super_admin` | Full system access, manage all users/nodes/sites |
-| `node_admin` | Manage nodes and Site Admins assigned to them |
-| `site_admin` | Manage own sites, view own profile |
+The platform uses a role-based access control (RBAC) system with three levels:
 
----
+### 1. Super Admin (`super_admin`)
+- **Scope**: Global.
+- **Capabilities**:
+    - Deploy and approve new Nodes.
+    - Manage Storage Providers.
+    - View/Edit/Delete any User, Site, or Backup.
+    - Trigger global cleanup/updates.
 
-## Endpoints
+### 2. Node Admin (`node_admin`)
+- **Scope**: Assigned Nodes.
+- **Capabilities**:
+    - View details of their Nodes.
+    - Manage Sites on their Nodes.
+    - View Backups for their Sites.
+    - Create `site_admin` users (future feature).
+    - Cannot modify Storage Providers.
 
-### Get Current User
-```
-GET /api/v1/users/me
-Auth: Any authenticated
-```
-Returns the authenticated user's profile.
+### 3. Site Admin (`site_admin`)
+- **Scope**: Assigned Sites.
+- **Capabilities**:
+    - View their Sites.
+    - View/Download Backups.
+    - Trigger Manual Backups.
+    - Cannot see infrastructure details (Node stats, Storage config).
 
-### List Users
-```
-GET /api/v1/users/
-Auth: Node Admin+
-Query: skip (int), limit (int)
-```
-- **Super Admin**: All users
-- **Node Admin**: Site Admins on their nodes
+## Management
 
-### Create User
-```
-POST /api/v1/users/
-Auth: Super Admin
-Content-Type: application/json
-```
-```json
-{
-  "email": "user@example.com",
-  "password": "securepass",
-  "full_name": "John Doe",
-  "role": "site_admin"
-}
-```
-
-### Get User by ID
-```
-GET /api/v1/users/{user_id}
-Auth: Node Admin+
-```
-Access restricted by role hierarchy.
-
-### Update User
-```
-PUT /api/v1/users/{user_id}
-Auth: Node Admin+
-Content-Type: application/json
-```
-```json
-{
-  "full_name": "Updated Name",
-  "is_active": true
-}
-```
-> **Note**: Only Super Admins can change user roles.
-
-### Delete User
-```
-DELETE /api/v1/users/{user_id}
-Auth: Super Admin
-```
-Cannot delete yourself.
-
----
-
-## Response Schema
-
-```json
-{
-  "id": 1,
-  "email": "user@example.com",
-  "full_name": "John Doe",
-  "is_active": true,
-  "role": "site_admin"
-}
-```
-
-List response:
-```json
-{
-  "users": [...],
-  "total": 10
-}
-```
+Users are currently managed via the API or Dashboard by Super Admins.
