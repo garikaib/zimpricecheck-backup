@@ -1139,18 +1139,34 @@ Returns the log file as a text/plain download.
 
 ### Stream Logs (Real-time)
 **Endpoint**: `GET /logs/stream`
-**Auth**: Bearer Token (Super Admin only)
+**Auth**: Query parameter `?token=<jwt>` (Required)
 
 Server-Sent Events (SSE) stream of new log entries.
 
+> **Note**: Browser EventSource API cannot send custom headers, so authentication is via query parameter only.
+
+**Response Events:**
+```json
+{"event": "connected", "message": "Streaming logs...", "user": "admin@example.com"}
+{"timestamp": "...", "level": "INFO", "message": "...", ...}
+```
+
 **Usage (JavaScript):**
 ```javascript
-const source = new EventSource('/api/v1/logs/stream', {
-  headers: {'Authorization': 'Bearer <token>'}
-});
+// Get token from login response
+const token = 'your-jwt-token';
+
+// Connect to SSE stream with token as query param
+const source = new EventSource(`/api/v1/logs/stream?token=${token}`);
+
 source.onmessage = (event) => {
   const entry = JSON.parse(event.data);
   console.log(`[${entry.level}] ${entry.message}`);
+};
+
+source.onerror = (e) => {
+  console.error('SSE error:', e);
+  source.close();
 };
 ```
 

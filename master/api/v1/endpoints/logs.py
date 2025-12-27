@@ -137,19 +137,37 @@ async def search_logs(
 
 @router.get("/stream")
 async def stream_logs(
-    current_user: models.User = Depends(deps.get_current_superuser),
+    token: Optional[str] = Query(default=None, description="JWT token for SSE auth (since EventSource can't send headers)"),
+    db: Session = Depends(deps.get_db),
 ):
     """
     Stream new log entries in real-time using Server-Sent Events (SSE).
     
-    Connect using EventSource API in browser:
+    Authentication via query parameter `?token=<jwt>` is required.
+    (Browser EventSource API cannot send custom headers)
+    
+    Usage with EventSource:
     ```javascript
-    const source = new EventSource('/api/v1/logs/stream', {
-        headers: {'Authorization': 'Bearer <token>'}
-    });
+    const token = 'your-jwt-token';
+    const source = new EventSource(`/api/v1/logs/stream?token=${token}`);
     source.onmessage = (event) => console.log(JSON.parse(event.data));
+    source.onerror = (e) => console.error('SSE error:', e);
     ```
     """
+    # Require token query param for SSE (since EventSource can't send headers)
+    if not token:
+        raise HTTPException(
+            status_code=401, 
+            detail="Authentication required. Provide JWT token as ?token= query parameter."
+        )
+    
+    # Verify token and get user
+    current_user = deps.verify_token_string(token, db)
+    
+    # Check super admin role
+    if current_user.role != models.UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="Super admin access required")
+    
     log_file = get_log_dir() / "app.json.log"
     
     async def event_generator():
@@ -160,7 +178,7 @@ async def stream_logs(
         if log_file.exists():
             last_position = log_file.stat().st_size
         
-        yield f"data: {{'event': 'connected', 'message': 'Streaming logs...'}}\n\n"
+        yield f"data: {{\"event\": \"connected\", \"message\": \"Streaming logs...\", \"user\": \"{current_user.email}\"}}\n\n"
         
         while True:
             try:
@@ -188,7 +206,7 @@ async def stream_logs(
                 await asyncio.sleep(1)
                 
             except Exception as e:
-                yield f"data: {{'event': 'error', 'message': '{str(e)}'}}\n\n"
+                yield f"data: {{\"event\": \"error\", \"message\": \"{str(e)}\"}}\n\n"
                 await asyncio.sleep(5)
     
     return StreamingResponse(
