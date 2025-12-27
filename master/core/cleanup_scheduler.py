@@ -58,7 +58,17 @@ def run_scheduled_cleanup(db: Session) -> Dict[str, Any]:
             
             freed_bytes += backup.size_bytes or 0
             
-            # Delete the backup record (S3 cleanup would go here in production)
+            # Delete from S3 first
+            if backup.s3_path and backup.provider:
+                try:
+                    from master.core.reconciliation import delete_s3_object
+                    s3_deleted = delete_s3_object(backup.provider, backup.s3_path)
+                    if not s3_deleted:
+                        logger.warning(f"S3 deletion failed for {backup.filename}, proceeding with DB deletion")
+                except Exception as s3_error:
+                    logger.warning(f"S3 deletion error for {backup.filename}: {s3_error}")
+            
+            # Delete the backup record
             db.delete(backup)
             deleted_count += 1
             

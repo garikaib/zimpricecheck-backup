@@ -66,6 +66,46 @@ def list_site_backups(
     return {"backups": backup_list, "total": total}
 
 
+# ============== Scheduled Deletions (MUST be before /{backup_id} routes) ==============
+
+@router.get("/backups/scheduled-deletions")
+def list_scheduled_deletions(
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+) -> Any:
+    """
+    List all backups scheduled for automatic deletion.
+    Used by frontend to show pending cleanup warnings.
+    """
+    query = db.query(models.Backup).filter(
+        models.Backup.scheduled_deletion != None
+    )
+    
+    # Filter by access for non-super admins
+    if current_user.role == models.UserRole.NODE_ADMIN:
+        node_ids = [n.id for n in current_user.nodes]
+        query = query.join(models.Site).filter(models.Site.node_id.in_(node_ids))
+    
+    scheduled = query.order_by(models.Backup.scheduled_deletion.asc()).all()
+    
+    return {
+        "count": len(scheduled),
+        "backups": [
+            {
+                "backup_id": b.id,
+                "filename": b.filename,
+                "size_gb": round((b.size_bytes or 0) / (1024 ** 3), 2),
+                "site_id": b.site_id,
+                "site_name": b.site.name if b.site else None,
+                "scheduled_deletion": b.scheduled_deletion.isoformat(),
+                "days_remaining": max(0, (b.scheduled_deletion - datetime.utcnow()).days),
+                "created_at": b.created_at.isoformat() if b.created_at else None,
+            }
+            for b in scheduled
+        ]
+    }
+
+
 # ============== Single Backup Operations ==============
 
 @router.get("/backups/{backup_id}")
@@ -117,25 +157,49 @@ def get_backup_detail(
 @router.delete("/backups/{backup_id}")
 def delete_backup(
     backup_id: int,
-    delete_remote: bool = Query(False, description="Also delete file from remote storage"),
+    delete_remote: bool = Query(True, description="Also delete file from remote storage"),
     db: Session = Depends(deps.get_db),
     current_user: models.User = Depends(deps.get_current_superuser),
 ) -> Any:
     """
-    Delete a backup record. Optionally delete the remote file.
+    Delete a backup record and optionally the remote S3 file.
+    Updates storage counters for site, node, and provider.
     """
     backup = db.query(models.Backup).filter(models.Backup.id == backup_id).first()
     if not backup:
         raise HTTPException(status_code=404, detail="Backup not found")
     
-    site_name = backup.site.name if backup.site else "Unknown"
+    site = backup.site
+    site_name = site.name if site else "Unknown"
     filename = backup.filename
+    size_bytes = backup.size_bytes or 0
+    s3_deleted = False
     
-    # TODO: Implement remote file deletion if delete_remote=True
-    # This would require decrypting provider credentials and using boto3/similar
-    if delete_remote and backup.s3_path:
-        # Placeholder - actual implementation requires storage provider integration
-        pass
+    # Delete from S3 if requested
+    if delete_remote and backup.s3_path and backup.provider:
+        try:
+            from master.core.reconciliation import delete_s3_object
+            s3_deleted = delete_s3_object(backup.provider, backup.s3_path)
+        except Exception as e:
+            # Log but don't fail - still delete DB record
+            pass
+    
+    # Update storage counters
+    if site:
+        site.storage_used_bytes = max(0, (site.storage_used_bytes or 0) - size_bytes)
+        
+        if site.node:
+            site.node.storage_used_bytes = max(0, (site.node.storage_used_bytes or 0) - size_bytes)
+        
+        # Clear quota exceeded if now under limit
+        if site.quota_exceeded_at:
+            used = site.storage_used_bytes
+            quota = (site.storage_quota_gb or 10) * (1024 ** 3)
+            if used <= quota:
+                site.quota_exceeded_at = None
+    
+    if backup.provider:
+        backup.provider.used_bytes = max(0, (backup.provider.used_bytes or 0) - size_bytes)
     
     db.delete(backup)
     db.commit()
@@ -143,7 +207,48 @@ def delete_backup(
     return {
         "success": True,
         "message": f"Backup '{filename}' for site '{site_name}' deleted",
-        "remote_deleted": delete_remote and backup.s3_path is not None,
+        "s3_deleted": s3_deleted,
+        "freed_bytes": size_bytes,
+        "freed_gb": round(size_bytes / (1024 ** 3), 2),
+    }
+
+
+
+@router.delete("/backups/{backup_id}/cancel-deletion")
+def cancel_scheduled_deletion(
+    backup_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+) -> Any:
+    """
+    Cancel a scheduled deletion for a backup.
+    Clears the scheduled_deletion field.
+    """
+    backup = db.query(models.Backup).filter(models.Backup.id == backup_id).first()
+    if not backup:
+        raise HTTPException(status_code=404, detail="Backup not found")
+    
+    # Access check
+    if backup.site and current_user.role == models.UserRole.NODE_ADMIN:
+        if backup.site.node_id not in [n.id for n in current_user.nodes]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    if not backup.scheduled_deletion:
+        return {
+            "success": True,
+            "message": "Backup was not scheduled for deletion",
+            "backup_id": backup.id,
+        }
+    
+    old_date = backup.scheduled_deletion
+    backup.scheduled_deletion = None
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": f"Cancelled scheduled deletion for {backup.filename}",
+        "backup_id": backup.id,
+        "was_scheduled_for": old_date.isoformat(),
     }
 
 
@@ -175,18 +280,29 @@ def get_backup_download_url(
     if not backup.s3_path:
         raise HTTPException(status_code=400, detail="No remote path available for this backup")
     
-    # TODO: Generate presigned URL using storage provider credentials
-    # This is a placeholder - actual implementation requires:
-    # 1. Decrypt provider credentials
-    # 2. Use boto3 or equivalent to generate presigned URL
-    
-    # For now, return the path info so frontend knows it exists
-    return {
-        "backup_id": backup.id,
-        "filename": backup.filename,
-        "s3_path": backup.s3_path,
-        "provider": backup.provider.name,
-        "download_url": None,  # TODO: Implement presigned URL
-        "message": "Presigned URL generation not yet implemented. Use s3_path directly if you have provider access.",
-        "expires_in_seconds": 0,
-    }
+    # Generate presigned URL
+    try:
+        from master.core.reconciliation import get_s3_client
+        s3_client = get_s3_client(backup.provider)
+        
+        url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': backup.provider.bucket, 'Key': backup.s3_path},
+            ExpiresIn=3600  # 1 hour
+        )
+        
+        return {
+            "backup_id": backup.id,
+            "filename": backup.filename,
+            "download_url": url,
+            "expires_in_seconds": 3600,
+        }
+    except Exception as e:
+        return {
+            "backup_id": backup.id,
+            "filename": backup.filename,
+            "s3_path": backup.s3_path,
+            "provider": backup.provider.name,
+            "download_url": None,
+            "error": str(e),
+        }

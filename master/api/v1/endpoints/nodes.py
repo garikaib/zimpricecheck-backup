@@ -299,6 +299,67 @@ def update_node_quota(
     return node
 
 
+@router.get("/{node_id}/quota/status")
+def get_node_quota_status(
+    node_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+) -> Any:
+    """
+    Get comprehensive quota status for a node.
+    Returns usage breakdown by site for dashboard displays.
+    """
+    from master.core.quota_manager import check_node_quota_status, check_quota_status
+    
+    node = db.query(models.Node).filter(models.Node.id == node_id).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    
+    # Access check
+    if current_user.role != models.UserRole.SUPER_ADMIN:
+        if node.admin_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    node_status = check_node_quota_status(node, db)
+    
+    # Get breakdown by site
+    sites_breakdown = []
+    over_quota_count = 0
+    warning_count = 0
+    
+    for site in node.sites:
+        site_status = check_quota_status(site)
+        if site_status["is_over_quota"]:
+            over_quota_count += 1
+        elif site_status["usage_percentage"] >= 80:
+            warning_count += 1
+        
+        sites_breakdown.append({
+            "site_id": site.id,
+            "site_name": site.name,
+            "used_gb": site_status["used_gb"],
+            "quota_gb": site_status["quota_gb"],
+            "usage_percent": site_status["usage_percentage"],
+            "is_over_quota": site_status["is_over_quota"],
+        })
+    
+    # Sort by usage descending
+    sites_breakdown.sort(key=lambda x: x["used_gb"], reverse=True)
+    
+    return {
+        "node_id": node.id,
+        "hostname": node.hostname,
+        "used_gb": node_status["used_gb"],
+        "quota_gb": node_status["quota_gb"],
+        "usage_percent": node_status["usage_percentage"],
+        "is_over_quota": node_status["is_over_quota"],
+        "sites_count": len(node.sites),
+        "sites_over_quota": over_quota_count,
+        "sites_warning": warning_count,
+        "sites_breakdown": sites_breakdown,
+    }
+
+
 @router.get("/{node_id}/sites", response_model=schemas.SiteListResponse)
 def read_node_sites(
     node_id: int,

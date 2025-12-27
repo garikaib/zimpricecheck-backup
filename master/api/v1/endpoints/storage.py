@@ -357,3 +357,52 @@ def test_storage_provider(
         return {"success": False, "message": f"S3 Error: {error_code}", "available_space_gb": None}
     except Exception as e:
         return {"success": False, "message": str(e), "available_space_gb": None}
+
+
+# --- Storage Health & Reconciliation ---
+
+@router.get("/health")
+def get_storage_health(
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+) -> Any:
+    """
+    Get storage health status for dashboard.
+    Returns over-quota sites, warning sites, and pending deletions.
+    """
+    from master.core.reconciliation import get_storage_health as _get_storage_health
+    
+    return _get_storage_health(db)
+
+
+@router.post("/reconcile")
+def trigger_storage_reconciliation(
+    dry_run: bool = False,
+    db: Session = Depends(deps.get_db),
+    current_superuser: models.User = Depends(deps.get_current_superuser),
+) -> Any:
+    """
+    Trigger storage reconciliation.
+    Compares DB storage tracking with actual S3 usage and corrects drift.
+    
+    - dry_run: If true, only reports discrepancies without fixing
+    """
+    from master.core.reconciliation import run_full_reconciliation
+    
+    result = run_full_reconciliation(db, dry_run=dry_run)
+    return result
+
+
+@router.post("/cleanup")
+def trigger_scheduled_cleanup(
+    db: Session = Depends(deps.get_db),
+    current_superuser: models.User = Depends(deps.get_current_superuser),
+) -> Any:
+    """
+    Manually trigger scheduled cleanup.
+    Deletes all backups past their scheduled_deletion date.
+    """
+    from master.core.cleanup_scheduler import run_scheduled_cleanup
+    
+    result = run_scheduled_cleanup(db)
+    return result

@@ -194,6 +194,118 @@ def update_site_quota(
     }
 
 
+@router.get("/{site_id}/quota/status")
+def get_site_quota_status(
+    site_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_active_user),
+):
+    """
+    Get comprehensive quota status for a site.
+    Used by frontend for quota displays and warnings.
+    """
+    from master.core.quota_manager import check_quota_status, check_node_quota_status
+    
+    site = db.query(models.Site).filter(models.Site.id == site_id).first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Check access
+    if current_user.role == models.UserRole.SITE_ADMIN:
+        if site.admin_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif current_user.role == models.UserRole.NODE_ADMIN:
+        if site.node_id not in [n.id for n in current_user.nodes]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    site_status = check_quota_status(site)
+    node_status = check_node_quota_status(site.node, db) if site.node else None
+    
+    # Get last backup size for estimation
+    last_backup = db.query(models.Backup).filter(
+        models.Backup.site_id == site_id,
+        models.Backup.status == "SUCCESS"
+    ).order_by(models.Backup.created_at.desc()).first()
+    
+    estimated_next_gb = round((last_backup.size_bytes or 0) / (1024 ** 3), 2) if last_backup else 0
+    
+    # Check for scheduled deletions
+    scheduled = db.query(models.Backup).filter(
+        models.Backup.site_id == site_id,
+        models.Backup.scheduled_deletion != None
+    ).first()
+    
+    return {
+        "site_id": site.id,
+        "site_name": site.name,
+        "used_bytes": site_status["used_bytes"],
+        "used_gb": site_status["used_gb"],
+        "quota_gb": site_status["quota_gb"],
+        "usage_percent": site_status["usage_percentage"],
+        "is_over_quota": site_status["is_over_quota"],
+        "quota_exceeded_at": site_status["exceeded_at"],
+        "pending_deletion": {
+            "backup_id": scheduled.id,
+            "filename": scheduled.filename,
+            "scheduled_for": scheduled.scheduled_deletion.isoformat()
+        } if scheduled else None,
+        "node_id": site.node_id,
+        "node_quota_gb": node_status["quota_gb"] if node_status else None,
+        "node_used_gb": node_status["used_gb"] if node_status else None,
+        "node_usage_percent": node_status["usage_percentage"] if node_status else None,
+        "can_backup": not site_status["is_over_quota"],
+        "estimated_next_backup_gb": estimated_next_gb,
+    }
+
+
+@router.get("/{site_id}/quota/check")
+def check_pre_backup_quota(
+    site_id: int,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_active_user),
+):
+    """
+    Pre-flight quota check before starting a backup.
+    Returns whether backup can proceed and estimated impact.
+    """
+    site = db.query(models.Site).filter(models.Site.id == site_id).first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    used_bytes = site.storage_used_bytes or 0
+    quota_bytes = (site.storage_quota_gb or 10) * (1024 ** 3)
+    
+    # Estimate next backup size from last backup
+    last_backup = db.query(models.Backup).filter(
+        models.Backup.site_id == site_id,
+        models.Backup.status == "SUCCESS"
+    ).order_by(models.Backup.created_at.desc()).first()
+    
+    estimated_bytes = last_backup.size_bytes if last_backup else 0
+    projected_bytes = used_bytes + estimated_bytes
+    
+    would_exceed = projected_bytes > quota_bytes
+    
+    # Check node quota too
+    node_would_exceed = False
+    if site.node:
+        node_used = site.node.storage_used_bytes or 0
+        node_quota = (site.node.storage_quota_gb or 100) * (1024 ** 3)
+        node_would_exceed = (node_used + estimated_bytes) > node_quota
+    
+    return {
+        "site_id": site.id,
+        "can_proceed": not would_exceed and not node_would_exceed,
+        "current_used_gb": round(used_bytes / (1024 ** 3), 2),
+        "quota_gb": site.storage_quota_gb or 10,
+        "estimated_backup_gb": round(estimated_bytes / (1024 ** 3), 2),
+        "projected_used_gb": round(projected_bytes / (1024 ** 3), 2),
+        "would_exceed_site_quota": would_exceed,
+        "would_exceed_node_quota": node_would_exceed,
+        "warning": "Backup would exceed quota" if would_exceed else None,
+    }
+
+
 # ============== Backup Control Endpoints ==============
 
 @router.post("/{site_id}/backup/start")
