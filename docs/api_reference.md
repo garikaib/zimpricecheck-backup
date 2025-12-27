@@ -1046,3 +1046,148 @@ Resets a stuck backup status back to `idle`. Use this if a backup is stuck in `r
   "timestamp": "2025-12-26T10:30:00.000000"
 }
 ```
+
+---
+
+## Logs Management Endpoints
+
+All log endpoints require **Super Admin** role for security.
+
+### List Log Entries
+**Endpoint**: `GET /logs`
+**Auth**: Bearer Token (Super Admin only)
+**Query Params**:
+- `limit` (int, default: 50, max: 500): Number of entries
+- `level` (string, optional): Filter by level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`)
+- `search` (string, optional): Filter by message content
+
+**Response:**
+```json
+{
+  "entries": [
+    {
+      "timestamp": "2025-12-27T03:59:26.541554Z",
+      "level": "INFO",
+      "logger": "master.api.v1.endpoints.auth",
+      "message": "[LOGIN] Token created successfully for: admin@example.com",
+      "module": "auth",
+      "function": "login_access_token",
+      "line": 101
+    }
+  ],
+  "total": 5,
+  "filters": {
+    "level": null,
+    "search": null
+  }
+}
+```
+
+### List Log Files
+**Endpoint**: `GET /logs/files`
+**Auth**: Bearer Token (Super Admin only)
+
+**Response:**
+```json
+{
+  "log_directory": "/opt/wordpress-backup/logs",
+  "files": [
+    {
+      "name": "app.json.log",
+      "size_bytes": 954,
+      "modified": "2025-12-27T03:59:07.572972"
+    },
+    {
+      "name": "app.log",
+      "size_bytes": 502,
+      "modified": "2025-12-27T03:59:07.572972"
+    },
+    {
+      "name": "error.log",
+      "size_bytes": 0,
+      "modified": "2025-12-27T03:56:38.059638"
+    }
+  ],
+  "total": 3
+}
+```
+
+### Download Log File
+**Endpoint**: `GET /logs/download/{filename}`
+**Auth**: Bearer Token (Super Admin only)
+
+Returns the log file as a text/plain download.
+
+**Security**: Only files in the log directory can be downloaded (path traversal protection).
+
+### Search Logs
+**Endpoint**: `GET /logs/search`
+**Auth**: Bearer Token (Super Admin only)
+**Query Params**:
+- `query` (string, required): Search term
+- `limit` (int, default: 100, max: 500)
+- `level` (string, optional)
+
+**Response:**
+```json
+{
+  "query": "login",
+  "entries": [...],
+  "total": 3
+}
+```
+
+### Stream Logs (Real-time)
+**Endpoint**: `GET /logs/stream`
+**Auth**: Bearer Token (Super Admin only)
+
+Server-Sent Events (SSE) stream of new log entries.
+
+**Usage (JavaScript):**
+```javascript
+const source = new EventSource('/api/v1/logs/stream', {
+  headers: {'Authorization': 'Bearer <token>'}
+});
+source.onmessage = (event) => {
+  const entry = JSON.parse(event.data);
+  console.log(`[${entry.level}] ${entry.message}`);
+};
+```
+
+### Log Statistics
+**Endpoint**: `GET /logs/stats`
+**Auth**: Bearer Token (Super Admin only)
+
+**Response:**
+```json
+{
+  "file_count": 3,
+  "total_size_bytes": 2220,
+  "total_size_mb": 0.0,
+  "recent_entries_by_level": {
+    "INFO": 6
+  },
+  "log_directory": "/opt/wordpress-backup/logs"
+}
+```
+
+### Log Levels
+**Endpoint**: `GET /logs/levels`
+**Auth**: Bearer Token (Super Admin only)
+
+**Response:**
+```json
+{
+  "current_level": "INFO",
+  "available_levels": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+}
+```
+
+### Log Files
+
+| File | Purpose |
+|------|---------|
+| `app.log` | Human-readable text logs (INFO+) |
+| `app.json.log` | JSON-formatted logs for API parsing |
+| `error.log` | ERROR and CRITICAL logs only |
+
