@@ -1,4 +1,5 @@
 import logging
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -7,9 +8,23 @@ from master.core.logging_config import setup_logging, get_logger
 from master.api.v1.endpoints import auth, nodes, stats, users, sites, activity_logs, settings as settings_router, storage, communications, backups, logs
 from fastapi import APIRouter
 
+# Initialize Sentry for error tracking
+sentry_sdk.init(
+    dsn="https://0e517d0fa9f105e17db8cb1831006665@o4510604827230208.ingest.de.sentry.io/4510604843286608",
+    # Add data like request headers and IP for users
+    send_default_pii=True,
+    # Set traces_sample_rate to capture performance data
+    traces_sample_rate=0.1,  # 10% of requests for performance monitoring
+    # Set profiles_sample_rate to profile requests
+    profiles_sample_rate=0.1,
+    # Environment tag
+    environment="production",
+)
+
 # Configure logging with file handlers and JSON output
 setup_logging()
 logger = get_logger(__name__)
+logger.info("Sentry error tracking initialized")
 
 settings = get_settings()
 

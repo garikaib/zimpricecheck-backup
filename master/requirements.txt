@@ -13,3 +13,5 @@ psycopg2-binary==2.9.9
 httpx
 boto3
 pysendpulse>=0.1.8
+sentry-sdk[fastapi]
+
