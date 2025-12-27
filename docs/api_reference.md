@@ -1207,3 +1207,164 @@ source.onerror = (e) => {
 | `app.json.log` | JSON-formatted logs for API parsing |
 | `error.log` | ERROR and CRITICAL logs only |
 
+---
+
+## Node Metrics Endpoints
+
+Monitor node system resources (CPU, memory, disk, network).
+
+### Get Node Metrics
+**Endpoint**: `GET /metrics/node`
+**Auth**: Bearer Token (Node Admin+)
+
+**Response:**
+```json
+{
+  "timestamp": "2025-12-27T05:20:20.186148Z",
+  "hostname": "wp.zimpricecheck.com",
+  "uptime_seconds": 274941,
+  "cpu": {
+    "usage_percent": 2.5,
+    "core_count": 2,
+    "load_avg_1min": 0.70,
+    "load_avg_5min": 0.75,
+    "load_avg_15min": 0.90
+  },
+  "memory": {
+    "total_bytes": 2012913664,
+    "used_bytes": 1139146752,
+    "available_bytes": 873766912,
+    "percent_used": 56.6,
+    "swap_total_bytes": 4294963200,
+    "swap_used_bytes": 975941632,
+    "swap_percent": 22.7
+  },
+  "disks": [
+    {
+      "path": "/",
+      "total_bytes": 40483942400,
+      "used_bytes": 20843966464,
+      "free_bytes": 19623198720,
+      "percent_used": 51.5
+    }
+  ],
+  "network": {
+    "bytes_sent": 2068444287,
+    "bytes_recv": 1049511026,
+    "packets_sent": 7997140,
+    "packets_recv": 4915191,
+    "connections_count": 129
+  },
+  "backup_process": null,
+  "psutil_available": true
+}
+```
+
+### Get Metrics Summary
+**Endpoint**: `GET /metrics/summary`
+**Auth**: Bearer Token (Node Admin+)
+
+Dashboard-friendly summary of system health.
+
+**Response:**
+```json
+{
+  "timestamp": "2025-12-27T05:20:34.586525Z",
+  "hostname": "wp.zimpricecheck.com",
+  "uptime_seconds": 274955,
+  "cpu_percent": 2.5,
+  "load_average": 0.69,
+  "memory_percent": 58.8,
+  "memory_available_gb": 0.77,
+  "disk_percent": 51.5,
+  "disk_free_gb": 18.28,
+  "backup_running": false,
+  "psutil_available": true
+}
+```
+
+### Get Disk Details
+**Endpoint**: `GET /metrics/disk`
+**Auth**: Bearer Token (Node Admin+)
+
+**Response:**
+```json
+{
+  "partitions": [
+    {
+      "device": "/dev/sda1",
+      "mountpoint": "/",
+      "fstype": "ext4",
+      "total_gb": 37.7,
+      "used_gb": 19.4,
+      "free_gb": 18.3,
+      "percent_used": 51.5
+    }
+  ]
+}
+```
+
+### Stream Node Metrics (Real-time)
+**Endpoint**: `GET /metrics/node/stream`
+**Auth**: Query parameter `?token=<jwt>` (Required)
+**Query Params**: `interval` (int, 1-60, default: 5) - seconds between updates
+
+SSE stream of system metrics.
+
+**Usage:**
+```javascript
+const token = 'your-jwt-token';
+const source = new EventSource(`/api/v1/metrics/node/stream?token=${token}&interval=5`);
+source.onmessage = (event) => {
+  const metrics = JSON.parse(event.data);
+  console.log(`CPU: ${metrics.cpu.usage_percent}%`);
+};
+```
+
+---
+
+## Backup Progress Streaming
+
+### Stream Backup Progress
+**Endpoint**: `GET /daemon/backup/stream/{site_id}`
+**Auth**: Query parameter `?token=<jwt>` (Required)
+**Query Params**: `interval` (int, 1-30, default: 2) - seconds between polls
+
+SSE stream of backup progress. Automatically closes when backup completes/fails.
+
+**Response Events:**
+```json
+{"event": "connected", "site_id": 1, "message": "Streaming backup progress..."}
+{"event": "progress", "site_id": 1, "site_name": "example.com", "status": "running", "progress": 40, "message": "Running: backup_files", "error": null, "elapsed_seconds": 45}
+{"event": "finished", "status": "completed"}
+```
+
+**Usage:**
+```javascript
+const token = 'your-jwt-token';
+const source = new EventSource(`/api/v1/daemon/backup/stream/1?token=${token}`);
+
+source.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  
+  if (data.event === 'progress') {
+    console.log(`[${data.status}] ${data.progress}% - ${data.message}`);
+  }
+  
+  if (data.event === 'finished') {
+    console.log(`Backup ${data.status}`);
+    source.close();
+  }
+};
+
+source.onerror = () => source.close();
+```
+
+**Status Values:**
+| Status | Description |
+|--------|-------------|
+| `idle` | No backup running |
+| `running` | Backup in progress |
+| `completed` | Backup finished successfully |
+| `failed` | Backup failed (check `error` field) |
+| `stopped` | Backup stopped by user |
