@@ -119,3 +119,40 @@ Get node details with stats.
   "backups_count": 15
 }
 ```
+
+---
+
+## GET /nodes/{id}/backups
+
+List backups for a node.
+
+### Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `skip` | int | 0 | Offset |
+| `limit` | int | 50 | Max results |
+| `site_id` | int | null | Filter by site |
+
+### Response
+
+```json
+{
+  "backups": [
+    {
+      "id": 1,
+      "site_id": 1,
+      "site_name": "example.com",
+      "filename": "example.com_20251227_082133.tar.zst",
+      "size_bytes": 3612358215,
+      "size_gb": 3.36,
+      "s3_path": "s3://bucket/example.com_20251227_082133.tar.zst",
+      "created_at": "2025-12-27T08:22:04.588990",
+      "backup_type": "full",
+      "status": "SUCCESS",
+      "storage_provider": "iDrive E2 Shared"
+    }
+  ],
+  "total": 1
+}
+```

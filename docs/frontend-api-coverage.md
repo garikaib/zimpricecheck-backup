@@ -135,10 +135,13 @@ interface BackupResponse {
   site_id: number;
   site_name: string;
   filename: string;
+  size_bytes: number;
   size_gb: number;
+  s3_path?: string;
   created_at: string;
   backup_type: 'full' | 'incremental';
   status: string;
+  storage_provider?: string;
 }
 
 interface BackupListResponse {

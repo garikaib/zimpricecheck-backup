@@ -456,10 +456,13 @@ def read_node_backups(
             "site_id": backup.site_id,
             "site_name": backup.site.name if backup.site else "Unknown",
             "filename": backup.filename,
+            "size_bytes": backup.size_bytes or 0,
             "size_gb": round((backup.size_bytes or 0) / (1024**3), 2),
+            "s3_path": backup.s3_path,
             "created_at": backup.created_at,
             "backup_type": backup.backup_type or "full",
             "status": backup.status or "unknown",
+            "storage_provider": backup.provider.name if backup.provider else None,
         })
     
     return {"backups": backup_responses, "total": total}
