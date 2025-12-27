@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
 import enum
 import datetime
+import uuid
 
 Base = declarative_base()
 
@@ -83,12 +84,14 @@ class Node(Base):
     __tablename__ = "nodes"
     
     id = Column(Integer, primary_key=True, index=True)
+    uuid = Column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid.uuid4()))
     hostname = Column(String, index=True)
     ip_address = Column(String)
     api_key = Column(String, unique=True, index=True)  # For agent authentication
     is_active = Column(Boolean, default=True)
     status = Column(Enum(NodeStatus), default=NodeStatus.PENDING)
     storage_quota_gb = Column(Integer, default=100)
+    storage_used_bytes = Column(Integer, default=0)  # Track actual usage
     total_available_gb = Column(Integer, default=1000)
     registration_code = Column(String(5), nullable=True, index=True)  # 5-char code for registration
     
@@ -103,12 +106,14 @@ class Site(Base):
     __tablename__ = "sites"
     
     id = Column(Integer, primary_key=True, index=True)
+    uuid = Column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid.uuid4()))
     name = Column(String, index=True)
     wp_path = Column(String)
     db_name = Column(String)
     status = Column(String, default="active")  # active, paused, error
     site_url = Column(String, nullable=True) # Public URL of the site
     storage_used_bytes = Column(Integer, default=0)
+    storage_quota_gb = Column(Integer, default=10)  # Per-site quota
     
     # Backup status tracking
     backup_status = Column(String, default="idle")  # idle, running, completed, failed
@@ -116,6 +121,9 @@ class Site(Base):
     backup_started_at = Column(DateTime, nullable=True)
     backup_message = Column(String, nullable=True)
     backup_error = Column(String, nullable=True)
+    
+    # Quota tracking
+    quota_exceeded_at = Column(DateTime, nullable=True)  # When quota first exceeded
     
     # Belongs to a Node
     node_id = Column(Integer, ForeignKey("nodes.id"))
@@ -143,6 +151,9 @@ class Backup(Base):
     
     provider_id = Column(Integer, ForeignKey("storage_providers.id"), nullable=True)
     provider = relationship("StorageProvider", back_populates="backups")
+    
+    # Auto-cleanup scheduling
+    scheduled_deletion = Column(DateTime, nullable=True)  # Auto-delete after this date
 
 class NodeStats(Base):
     __tablename__ = "node_stats"

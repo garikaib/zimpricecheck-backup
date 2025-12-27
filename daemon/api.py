@@ -21,6 +21,7 @@ from daemon.modules.base import BackupContext, get_module
 from daemon.modules.wordpress import WordPressModule  # Ensure module is registered
 from master.api import deps
 from master.db import models
+from master.core.encryption import decrypt_credential
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -227,6 +228,25 @@ async def _run_real_backup(site_id: int, site_path: str, site_name: str):
             db.commit()
             logger.error(f"Could not parse wp-config for {site_name}")
             return
+            
+        # Fetch default storage provider
+        storage_provider = db.query(models.StorageProvider).filter(
+            models.StorageProvider.is_default == True,
+            models.StorageProvider.is_active == True
+        ).first()
+
+        storage_config = {}
+        if storage_provider:
+             storage_config = {
+                "type": storage_provider.type.value if hasattr(storage_provider.type, 'value') else str(storage_provider.type),
+                "bucket": storage_provider.bucket,
+                "region": storage_provider.region,
+                "endpoint": storage_provider.endpoint,
+                "access_key": decrypt_credential(storage_provider.access_key_encrypted),
+                "secret_key": decrypt_credential(storage_provider.secret_key_encrypted),
+             }
+        else:
+             logger.warning(f"No default storage provider found for {site_name}")
         
         # Create backup context
         context = BackupContext(
@@ -239,6 +259,10 @@ async def _run_real_backup(site_id: int, site_path: str, site_name: str):
                 "db_user": config.get("db_user"),
                 "db_password": config.get("db_password", ""),
                 "db_host": config.get("db_host", "localhost"),
+                "storage": storage_config,
+                # UUIDs for structured storage paths
+                "node_uuid": site.node.uuid if site.node else None,
+                "site_uuid": site.uuid,
             }
         )
         
@@ -312,7 +336,55 @@ async def _run_real_backup(site_id: int, site_path: str, site_name: str):
         site.backup_error = None
         site.storage_used_bytes = (site.storage_used_bytes or 0) + archive_size
         
+        # Update node-level storage tracking
+        if site.node:
+            site.node.storage_used_bytes = (site.node.storage_used_bytes or 0) + archive_size
+        
+        # Update provider-level storage tracking
+        if default_provider:
+            default_provider.used_bytes = (default_provider.used_bytes or 0) + archive_size
+        
         db.commit()
+        
+        # Check quota and send warning if exceeded
+        try:
+            from master.core.quota_manager import (
+                check_quota_status, mark_quota_exceeded, 
+                schedule_oldest_backup_deletion, send_quota_warning
+            )
+            import asyncio
+            
+            quota_status = check_quota_status(site)
+            
+            if quota_status["is_over_quota"]:
+                # Mark first exceeded
+                is_first_time = mark_quota_exceeded(site, db)
+                
+                if is_first_time:
+                    # Schedule oldest backup for deletion in 3 days
+                    scheduled = schedule_oldest_backup_deletion(site, db, days=3)
+                    
+                    # Send warning email
+                    admin_email = site.admin.email if site.admin else None
+                    if not admin_email and site.node and site.node.admin:
+                        admin_email = site.node.admin.email
+                    
+                    if admin_email:
+                        asyncio.create_task(
+                            send_quota_warning(site, admin_email, quota_status, scheduled)
+                        )
+                        logger.warning(f"Quota warning sent for {site_name}: {quota_status['used_gb']}GB / {quota_status['quota_gb']}GB")
+                    else:
+                        logger.warning(f"Quota exceeded for {site_name} but no admin email found")
+            else:
+                # Clear exceeded marker if back under quota
+                if site.quota_exceeded_at:
+                    site.quota_exceeded_at = None
+                    db.commit()
+                    logger.info(f"Site {site_name} back under quota")
+                    
+        except Exception as quota_error:
+            logger.warning(f"Quota check failed: {quota_error}")
         
         logger.info(f"Backup completed for {site_name}: {archive_name} ({archive_size} bytes)")
         

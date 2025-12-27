@@ -41,11 +41,15 @@ def read_sites(
         
         site_responses.append({
             "id": site.id,
+            "uuid": site.uuid,
             "name": site.name,
             "wp_path": site.wp_path,
             "db_name": site.db_name,
             "node_id": site.node_id,
+            "node_uuid": site.node.uuid if site.node else None,
             "status": site.status or "active",
+            "storage_used_bytes": site.storage_used_bytes or 0,
+            "storage_quota_gb": site.storage_quota_gb or 10,
             "storage_used_gb": round((site.storage_used_bytes or 0) / (1024**3), 2),
             "last_backup": last_backup,
         })
@@ -110,16 +114,83 @@ def read_site(
     
     return {
         "id": site.id,
+        "uuid": site.uuid,
         "name": site.name,
         "wp_path": site.wp_path,
         "db_name": site.db_name,
         "node_id": site.node_id,
+        "node_uuid": site.node.uuid if site.node else None,
         "status": site.status or "active",
+        "storage_used_bytes": site.storage_used_bytes or 0,
+        "storage_quota_gb": site.storage_quota_gb or 10,
         "storage_used_gb": round((site.storage_used_bytes or 0) / (1024**3), 2),
         "last_backup": last_backup,
         "backup_status": site.backup_status,
         "backup_progress": site.backup_progress,
         "backup_message": site.backup_message,
+    }
+
+
+# ============== Quota Management ==============
+
+@router.put("/{site_id}/quota")
+def update_site_quota(
+    site_id: int,
+    quota_gb: int,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+):
+    """
+    Update site storage quota.
+    Validates that quota doesn't exceed node limits.
+    """
+    from master.core.quota_manager import validate_site_quota_update
+    
+    site = db.query(models.Site).filter(models.Site.id == site_id).first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Check access
+    if current_user.role == models.UserRole.NODE_ADMIN:
+        if site.node_id not in [n.id for n in current_user.nodes]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get the node
+    node = site.node
+    if not node:
+        raise HTTPException(status_code=400, detail="Site has no associated node")
+    
+    # Validate quota
+    validation = validate_site_quota_update(quota_gb, site, node, db)
+    
+    if not validation["valid"]:
+        raise HTTPException(
+            status_code=400, 
+            detail={
+                "message": validation["error"],
+                "max_allowed_gb": validation.get("max_allowed", node.storage_quota_gb)
+            }
+        )
+    
+    # Update quota
+    old_quota = site.storage_quota_gb
+    site.storage_quota_gb = quota_gb
+    
+    # Clear exceeded marker if now under quota
+    if site.quota_exceeded_at:
+        used_bytes = site.storage_used_bytes or 0
+        if used_bytes <= quota_gb * (1024 ** 3):
+            site.quota_exceeded_at = None
+    
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": f"Quota updated from {old_quota} GB to {quota_gb} GB",
+        "site_id": site.id,
+        "old_quota_gb": old_quota,
+        "new_quota_gb": quota_gb,
+        "remaining_node_quota_gb": validation.get("remaining_node_quota"),
     }
 
 

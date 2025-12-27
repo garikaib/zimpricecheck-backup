@@ -11,6 +11,9 @@ import time
 from datetime import datetime
 from typing import List
 import logging
+import asyncio
+import boto3
+from botocore.exceptions import ClientError
 
 from daemon.modules.base import BackupModule, BackupContext, register_module
 from daemon.job_queue import StageResult, StageStatus
@@ -158,12 +161,27 @@ class WordPressModule(BackupModule):
         
         logger.info(f"Copying wp-content for {context.target_name}")
         
+        # Track skipped files due to permissions
+        skipped_files = []
+        
+        def copy_with_permissions_handling(src, dst):
+            """Copy function that handles permission errors gracefully."""
+            try:
+                shutil.copy2(src, dst)
+            except PermissionError as e:
+                skipped_files.append(src)
+                logger.warning(f"Skipping unreadable file: {src}")
+        
         try:
+            # Use dirs_exist_ok=True for Python 3.8+ resilience
+            # Exclude cache, logs, and wflogs (Wordfence logs with restricted permissions)
             shutil.copytree(
                 wp_content,
                 files_backup,
                 symlinks=True,
-                ignore=shutil.ignore_patterns("cache", "*.log"),
+                ignore=shutil.ignore_patterns("cache", "*.log", "wflogs"),
+                copy_function=copy_with_permissions_handling,
+                dirs_exist_ok=True,
             )
             
             # Calculate size
@@ -171,15 +189,22 @@ class WordPressModule(BackupModule):
             for dirpath, _, filenames in os.walk(files_backup):
                 for f in filenames:
                     fp = os.path.join(dirpath, f)
-                    total_size += os.path.getsize(fp)
+                    try:
+                        total_size += os.path.getsize(fp)
+                    except OSError:
+                        pass
             
             context.stage_data["files_size"] = total_size
             context.stage_data["files_path"] = files_backup
             
+            message = f"Files backed up ({total_size / 1024 / 1024:.1f} MB)"
+            if skipped_files:
+                message += f" - {len(skipped_files)} files skipped due to permissions"
+            
             return StageResult(
                 status=StageStatus.COMPLETED,
-                message=f"Files backed up ({total_size / 1024 / 1024:.1f} MB)",
-                details={"size_bytes": total_size},
+                message=message,
+                details={"size_bytes": total_size, "skipped_count": len(skipped_files)},
             )
             
         except Exception as e:
@@ -234,26 +259,91 @@ class WordPressModule(BackupModule):
             )
     
     async def _upload_remote(self, context: BackupContext) -> StageResult:
-        """Upload archive to remote storage."""
-        # TODO: Integrate with storage.py API
-        # For now, this is a placeholder
-        
+        """Upload to S3 compatible storage."""
         if not context.archive_path or not os.path.exists(context.archive_path):
             return StageResult(
                 status=StageStatus.FAILED,
                 message="Archive not found",
             )
         
-        logger.info(f"Uploading {context.stage_data.get('archive_name')} to remote storage")
+        # Get storage config from context
+        storage_config = context.config.get("storage")
+        if not storage_config or not storage_config.get("bucket"):
+            logger.warning("No storage configuration found in context, skipping upload")
+            return StageResult(
+                status=StageStatus.SKIPPED,
+                message="No storage provider configured",
+            )
+            
+        archive_name = context.stage_data.get('archive_name')
+        if not archive_name:
+             archive_name = os.path.basename(context.archive_path)
+             
+        bucket = storage_config['bucket']
         
-        # Placeholder - will integrate with storage provider API
-        context.remote_path = f"s3://bucket/{context.stage_data.get('archive_name')}"
+        # Build UUID-based path: {node_uuid}/{site_uuid}/{filename}
+        node_uuid = context.config.get('node_uuid')
+        site_uuid = context.config.get('site_uuid')
         
-        return StageResult(
-            status=StageStatus.COMPLETED,
-            message=f"Uploaded to {context.remote_path}",
-            details={"remote_path": context.remote_path},
-        )
+        if node_uuid and site_uuid:
+            key = f"{node_uuid}/{site_uuid}/{archive_name}"
+        else:
+            # Fallback to name-based path for backwards compatibility
+            key = f"{context.target_name}/{archive_name}"
+            logger.warning(f"Using name-based path (missing UUIDs): {key}")
+        
+        logger.info(f"Uploading {archive_name} to {bucket}/{key}...")
+        
+        try:
+            # Build S3 client args
+            client_args = {
+                'service_name': 's3',
+                'region_name': storage_config.get('region') or 'us-east-1',
+                'aws_access_key_id': storage_config.get('access_key'),
+                'aws_secret_access_key': storage_config.get('secret_key'),
+            }
+            
+            if storage_config.get('endpoint'):
+                endpoint = storage_config['endpoint']
+                if not endpoint.startswith("http"):
+                    endpoint = f"https://{endpoint}"
+                client_args['endpoint_url'] = endpoint
+            
+            # Helper function for blocking upload
+            def upload_file_sync():
+                s3 = boto3.client(**client_args)
+                s3.upload_file(context.archive_path, bucket, key)
+            
+            # Run upload in thread pool to avoid blocking async loop
+            loop = asyncio.get_event_loop()
+            start_upload = time.monotonic()
+            await loop.run_in_executor(None, upload_file_sync)
+            upload_duration = time.monotonic() - start_upload
+            
+            context.remote_path = f"s3://{bucket}/{key}"
+            file_size_mb = os.path.getsize(context.archive_path) / (1024 * 1024)
+            speed_mbps = file_size_mb / upload_duration if upload_duration > 0 else 0
+            
+            logger.info(f"Uploaded to {context.remote_path} in {upload_duration:.2f}s ({speed_mbps:.2f} MB/s)")
+            
+            return StageResult(
+                status=StageStatus.COMPLETED,
+                message=f"Uploaded to {context.remote_path}",
+                details={
+                    "remote_path": context.remote_path,
+                    "bucket": bucket,
+                    "key": key,
+                    "duration": upload_duration,
+                    "speed_mbps": speed_mbps
+                },
+            )
+            
+        except Exception as e:
+            logger.exception(f"S3 Upload failed: {e}")
+            return StageResult(
+                status=StageStatus.FAILED,
+                message=f"Upload failed: {str(e)}",
+            )
     
     async def _cleanup(self, context: BackupContext) -> StageResult:
         """Remove temporary files."""

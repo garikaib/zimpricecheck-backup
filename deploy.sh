@@ -118,7 +118,68 @@ find . -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 echo "[*] Setting up Master venv..."
 if [ ! -d "venv" ]; then python3 -m venv venv; fi
 ./venv/bin/pip install --upgrade pip -q
-./venv/bin/pip install -r master/requirements.txt -q
+./venv/bin/pip install -r master/requirements.txt --upgrade
+
+echo "[*] Running Database Migrations..."
+PYTHONPATH=. ./venv/bin/python3 -c "
+import uuid
+from sqlalchemy import text
+from master.db.session import engine
+
+with engine.connect() as conn:
+    # Add uuid column to nodes
+    try:
+        conn.execute(text('ALTER TABLE nodes ADD COLUMN uuid VARCHAR(36)'))
+        conn.commit()
+        print('  Added uuid to nodes')
+    except: pass
+    
+    # Add uuid column to sites
+    try:
+        conn.execute(text('ALTER TABLE sites ADD COLUMN uuid VARCHAR(36)'))
+        conn.commit()
+        print('  Added uuid to sites')
+    except: pass
+    
+    # Add storage_used_bytes to nodes
+    try:
+        conn.execute(text('ALTER TABLE nodes ADD COLUMN storage_used_bytes INTEGER DEFAULT 0'))
+        conn.commit()
+        print('  Added storage_used_bytes to nodes')
+    except: pass
+    
+    # Add storage_quota_gb to sites
+    try:
+        conn.execute(text('ALTER TABLE sites ADD COLUMN storage_quota_gb INTEGER DEFAULT 10'))
+        conn.commit()
+        print('  Added storage_quota_gb to sites')
+    except: pass
+    
+    # Add quota_exceeded_at to sites
+    try:
+        conn.execute(text('ALTER TABLE sites ADD COLUMN quota_exceeded_at DATETIME'))
+        conn.commit()
+        print('  Added quota_exceeded_at to sites')
+    except: pass
+    
+    # Add scheduled_deletion to backups
+    try:
+        conn.execute(text('ALTER TABLE backups ADD COLUMN scheduled_deletion DATETIME'))
+        conn.commit()
+        print('  Added scheduled_deletion to backups')
+    except: pass
+    
+    # Generate UUIDs for existing records
+    for row in conn.execute(text('SELECT id FROM nodes WHERE uuid IS NULL')):
+        conn.execute(text('UPDATE nodes SET uuid = :u WHERE id = :i'), {'u': str(uuid.uuid4()), 'i': row[0]})
+        print(f'  Node {row[0]} assigned UUID')
+    conn.commit()
+    
+    for row in conn.execute(text('SELECT id FROM sites WHERE uuid IS NULL')):
+        conn.execute(text('UPDATE sites SET uuid = :u WHERE id = :i'), {'u': str(uuid.uuid4()), 'i': row[0]})
+        print(f'  Site {row[0]} assigned UUID')
+    conn.commit()
+"
 
 echo "[*] Initializing Database..."
 PYTHONPATH=. ./venv/bin/python3 master/init_db.py

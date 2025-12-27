@@ -69,8 +69,10 @@ class NodeStatusResponse(BaseModel):
 
 class NodeResponse(NodeBase):
     id: int
+    uuid: Optional[str] = None
     status: str
     storage_quota_gb: int
+    storage_used_bytes: int = 0
     class Config:
         from_attributes = True
 
@@ -107,9 +109,11 @@ class NodeStatsCreate(NodeStatsBase):
 # -- Extended Node Schemas --
 class NodeDetailResponse(NodeBase):
     id: int
+    uuid: Optional[str] = None
     status: str
     storage_quota_gb: int
     total_available_gb: int
+    storage_used_bytes: int = 0
     storage_used_gb: float = 0.0
     sites_count: int = 0
     backups_count: int = 0
@@ -128,8 +132,12 @@ class NodeSimple(BaseModel):
 # -- Site Schemas --
 class SiteResponse(SiteBase):
     id: int
+    uuid: Optional[str] = None
     node_id: int
+    node_uuid: Optional[str] = None  # For structured storage paths
     status: str
+    storage_used_bytes: int = 0
+    storage_quota_gb: int = 10
     storage_used_gb: float = 0.0
     last_backup: Optional[datetime] = None
     class Config:
