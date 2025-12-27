@@ -202,11 +202,9 @@ def main():
     )
     args = parser.parse_args()
     
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    # Configure logging with file handlers
+    from master.core.logging_config import setup_logging
+    setup_logging()
     
     # Load config
     config = load_config()
