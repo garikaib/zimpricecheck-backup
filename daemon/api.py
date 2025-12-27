@@ -7,9 +7,12 @@ This runs on nodes to receive commands from the master.
 import asyncio
 import logging
 import os
+import json
+import time
 from typing import Dict, Any, Optional
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -20,7 +23,7 @@ from master.api import deps
 from master.db import models
 from pathlib import Path
 
-logger = logging.getLogger(__name__)\
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/daemon", tags=["daemon"])
 
@@ -102,7 +105,9 @@ async def _run_real_backup(site_id: int, site_path: str, site_name: str):
     Run a real WordPress backup using the WordPressModule.
     Updates site status in DB at each stage.
     """
-    from master.db.database import SessionLocal
+    from master.db.session import SessionLocal  # Fixed: was master.db.database
+    
+    logger.info(f"[BACKUP] _run_real_backup started for {site_name} (ID: {site_id})")
     
     db = SessionLocal()
     
@@ -374,3 +379,108 @@ async def daemon_health(db: Session = Depends(deps.get_db)):
         "running_backups": running_count,
         "timestamp": datetime.utcnow().isoformat(),
     }
+
+
+@router.get("/backup/stream/{site_id}")
+async def stream_backup_progress(
+    site_id: int,
+    token: Optional[str] = Query(default=None, description="JWT token for SSE auth"),
+    interval: int = Query(default=2, ge=1, le=30, description="Poll interval in seconds"),
+    db: Session = Depends(deps.get_db),
+):
+    """
+    Stream backup progress in real-time using Server-Sent Events (SSE).
+    
+    Polls the database for status updates at the specified interval.
+    Automatically closes when backup completes or fails.
+    
+    Usage:
+    ```javascript
+    const token = 'your-jwt-token';
+    const source = new EventSource(`/api/v1/daemon/backup/stream/1?token=${token}`);
+    source.onmessage = (event) => {
+      const progress = JSON.parse(event.data);
+      console.log(`[${progress.status}] ${progress.progress}% - ${progress.message}`);
+    };
+    source.onerror = () => source.close();
+    ```
+    """
+    # Require token query param for SSE
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required. Provide JWT token as ?token= query parameter."
+        )
+    
+    # Verify token
+    current_user = deps.verify_token_string(token, db)
+    
+    # Check site exists
+    site = db.query(models.Site).filter(models.Site.id == site_id).first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    async def event_generator():
+        """Generator that yields backup status as SSE events."""
+        from master.db.session import SessionLocal
+        
+        # Use a fresh session for polling
+        poll_db = SessionLocal()
+        start_time = time.time()
+        
+        try:
+            yield f"data: {{\"event\": \"connected\", \"site_id\": {site_id}, \"message\": \"Streaming backup progress...\"}}\n\n"
+            
+            while True:
+                try:
+                    # Refresh site from DB
+                    poll_db.expire_all()
+                    site = poll_db.query(models.Site).filter(models.Site.id == site_id).first()
+                    
+                    if not site:
+                        yield f"data: {{\"event\": \"error\", \"message\": \"Site not found\"}}\n\n"
+                        break
+                    
+                    elapsed = int(time.time() - start_time)
+                    
+                    # Build progress event
+                    progress_data = {
+                        "event": "progress",
+                        "site_id": site.id,
+                        "site_name": site.name,
+                        "status": site.backup_status or "idle",
+                        "progress": site.backup_progress or 0,
+                        "message": site.backup_message or "",
+                        "error": site.backup_error,
+                        "elapsed_seconds": elapsed,
+                        "started_at": site.backup_started_at.isoformat() if site.backup_started_at else None,
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    }
+                    
+                    yield f"data: {json.dumps(progress_data)}\n\n"
+                    
+                    # Check terminal conditions
+                    if site.backup_status in ["completed", "failed", "stopped", "idle"]:
+                        # Give client time to receive final status
+                        await asyncio.sleep(1)
+                        yield f"data: {{\"event\": \"finished\", \"status\": \"{site.backup_status}\"}}\n\n"
+                        break
+                    
+                    # Wait before next poll
+                    await asyncio.sleep(interval)
+                    
+                except Exception as e:
+                    yield f"data: {{\"event\": \"error\", \"message\": \"{str(e)}\"}}\n\n"
+                    await asyncio.sleep(interval)
+        finally:
+            poll_db.close()
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )

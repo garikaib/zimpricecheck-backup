@@ -28,6 +28,28 @@ class BackupContext:
     
     # For passing data between stages
     stage_data: Dict[str, Any] = field(default_factory=dict)
+    
+    # Progress tracking
+    current_stage: str = ""
+    stage_number: int = 0
+    total_stages: int = 0
+    bytes_processed: int = 0
+    bytes_total: int = 0
+    start_time: Optional[float] = None  # time.time() when backup started
+    stage_start_time: Optional[float] = None
+    
+    # Callback for progress updates (optional)
+    # Signature: callback(context, message: str)
+    progress_callback: Optional[Any] = None
+    
+    def report_progress(self, message: str, bytes_delta: int = 0):
+        """Report progress update."""
+        self.bytes_processed += bytes_delta
+        if self.progress_callback:
+            try:
+                self.progress_callback(self, message)
+            except Exception:
+                pass  # Don't let callback errors break backup
 
 
 class BackupModule(ABC):

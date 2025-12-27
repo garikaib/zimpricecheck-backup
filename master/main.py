@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from master.core.config import get_settings
 from master.core.logging_config import setup_logging, get_logger
-from master.api.v1.endpoints import auth, nodes, stats, users, sites, activity_logs, settings as settings_router, storage, communications, backups, logs
+from master.api.v1.endpoints import auth, nodes, stats, users, sites, activity_logs, settings as settings_router, storage, communications, backups, logs, metrics
 from fastapi import APIRouter
 
 # Initialize Sentry for error tracking
@@ -74,6 +74,7 @@ api_router.include_router(storage.router, prefix="/storage", tags=["storage"])
 api_router.include_router(communications.router, prefix="/communications", tags=["communications"])
 api_router.include_router(backups.router, prefix="", tags=["backups"])  # Routes already have /sites and /backups prefixes
 api_router.include_router(logs.router, prefix="/logs", tags=["logs"])
+api_router.include_router(metrics.router, prefix="/metrics", tags=["metrics"])
 
 # Import jobs router (requires daemon module)
 try:
