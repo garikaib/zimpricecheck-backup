@@ -10,7 +10,8 @@ User authentication and token management.
 | POST | `/auth/magic-link` | Request magic link | Public |
 | GET | `/auth/verify-magic/{token}` | Verify magic link | Public |
 | GET | `/auth/me` | Get current user | Authenticated |
-| POST | `/auth/refresh` | Refresh token | Authenticated |
+| POST | `/auth/mfa/enable` | Enable MFA for user | Authenticated |
+| POST | `/auth/mfa/verify` | Verify MFA & get token | Public (with mfa_token) |
 
 ---
 
@@ -29,7 +30,50 @@ curl -X POST "https://api.example.com/api/v1/auth/login" \
   }'
 ```
 
+### Response (Success)
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "bearer"
+}
+```
+
+### Response (MFA Required)
+
+If the user has MFA enabled, the response will prompt for a second factor.
+
+```json
+{
+  "access_token": "", 
+  "token_type": "bearer",
+  "mfa_required": true,
+  "mfa_token": "eyJhbGciOiJIUzI1NiIs..." 
+}
+```
+
+The `mfa_token` is a temporary token with `scope="mfa_pending"` used to call `/auth/mfa/verify`.
+
+---
+
+## POST /auth/mfa/verify
+
+Verify the One-Time Password (OTP) sent to the user's communication channel.
+
+### Request
+
+```bash
+curl -X POST "https://api.example.com/api/v1/auth/mfa/verify" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "123456",
+    "mfa_token": "eyJhbGciOiJIUzI1NiIs..."
+  }'
+```
+
 ### Response
+
+Returns a standard access token upon successful verification.
 
 ```json
 {
@@ -40,24 +84,29 @@ curl -X POST "https://api.example.com/api/v1/auth/login" \
 
 ---
 
-## POST /auth/magic-link
+## POST /auth/mfa/enable
 
-Request a magic link login email.
+Enable MFA for the current user. Requires selecting a communication channel.
 
 ### Request
 
 ```bash
-curl -X POST "https://api.example.com/api/v1/auth/magic-link" \
+curl -X POST "https://api.example.com/api/v1/auth/mfa/enable" \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com"}'
+  -d '{
+    "channel_id": 1
+  }'
 ```
 
 ### Response
 
+Returns a fresh access token (optional) or success.
+
 ```json
 {
-  "success": true,
-  "message": "Magic link sent to admin@example.com"
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "bearer"
 }
 ```
 
@@ -75,6 +124,7 @@ Get current authenticated user info.
   "email": "admin@example.com",
   "full_name": "Admin User",
   "role": "super_admin",
-  "is_active": true
+  "is_active": true,
+  "mfa_enabled": true
 }
 ```
