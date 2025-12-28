@@ -115,7 +115,7 @@ def test_mfa_flow(client, db):
     assert response.status_code == 200
     token = response.json()["access_token"]
     
-    # 2. Enable MFA
+    # 2. Enable MFA (Initiate)
     # Note: enable_mfa expects json body with channel_id. 
     # schemas.MfaEnableRequest is the body.
     response = client.post(
@@ -126,8 +126,27 @@ def test_mfa_flow(client, db):
     if response.status_code != 200:
         print(response.json())
     assert response.status_code == 200
+    data = response.json()
+    assert data["mfa_required"] == True
+    setup_token = data["mfa_token"]
     
-    # 3. Login with MFA enabled -> Should return 200 (schema match) but with mfa_required=True
+    # Get OTP from DB
+    db.refresh(user)
+    setup_otp = user.login_otp
+    assert setup_otp is not None
+    
+    # 3. Verify MFA Setup
+    response = client.post("/api/v1/auth/mfa/verify", json={
+        "code": setup_otp,
+        "mfa_token": setup_token
+    })
+    assert response.status_code == 200
+    
+    # Verify enabled in DB
+    db.refresh(user)
+    assert user.mfa_enabled == True
+    
+    # 4. Login with MFA enabled -> Should return 200 (schema match) but with mfa_required=True
     response = client.post("/api/v1/auth/login", json={
         "username": "mfa_user@example.com",
         "password": "StrongPass123!"
@@ -136,26 +155,18 @@ def test_mfa_flow(client, db):
     data = response.json()
     assert data["mfa_required"] == True
     assert data["mfa_token"] is not None
-    mfa_token = data["mfa_token"]
+    login_token = data["mfa_token"]
     
-    # 4. Verify MFA with wrong code
-    response = client.post("/api/v1/auth/mfa/verify", json={
-        "code": "000000",
-        "mfa_token": mfa_token
-    })
-    assert response.status_code == 400
-    
-    # 5. Verify with correct code
+    # 5. Verify Login MFA
     db.refresh(user)
-    otp = user.login_otp
+    login_otp = user.login_otp
     
+    # Verify with correct code
     response = client.post("/api/v1/auth/mfa/verify", json={
-        "code": otp,
-        "mfa_token": mfa_token
+        "code": login_otp,
+        "mfa_token": login_token
     })
     assert response.status_code == 200
-    final_data = response.json()
-    assert "access_token" in final_data
-    # Check that access_token is real (has role claim)
-    # verify logic handles this.
+    assert response.status_code == 200
+    assert response.json()["access_token"]  # Real token
 

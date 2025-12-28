@@ -374,6 +374,7 @@ def verify_mfa(
 ):
     """
     Verify MFA OTP and return access token.
+    If scope is 'mfa_setup', also enables MFA for the user.
     """
     from jose import jwt, JWTError
     from datetime import datetime
@@ -386,7 +387,8 @@ def verify_mfa(
         email: str = payload.get("sub")
         scope: str = payload.get("scope")
         
-        if not email or scope != "mfa_pending":
+        # Accept both pending (login) and setup (enable) scopes
+        if not email or scope not in ["mfa_pending", "mfa_setup"]:
             raise HTTPException(status_code=401, detail="Invalid MFA token")
             
     except JWTError:
@@ -409,6 +411,18 @@ def verify_mfa(
     # Clear OTP
     user.login_otp = None
     user.login_otp_expires = None
+    
+    # Enable MFA if this was a setup flow
+    if scope == "mfa_setup":
+        user.mfa_enabled = True
+        logger.info(f"[MFA] Enabled for user {user.email}")
+        log_action(
+            action=models.ActionType.PROFILE_UPDATE,
+            user=user,
+            request=request,
+            details={"action": "enable_mfa_confirmed"},
+        )
+        
     db.commit()
     
     # Issue real tokens
@@ -423,38 +437,57 @@ def verify_mfa(
 
 @router.post("/mfa/enable", response_model=schemas.Token)
 @limiter.limit("5/minute")
-def enable_mfa(
+async def enable_mfa(
     request: Request,
     request_data: schemas.MfaEnableRequest,
     current_user: models.User = Depends(deps.get_current_user),
     db: Session = Depends(deps.get_db),
 ):
     """
-    Enable MFA for current user.
+    Initiate MFA setup. Sends OTP to confirm channel.
+    Does NOT enable MFA until verified.
     """
     # Verify channel exists
     channel = db.query(models.CommunicationChannel).filter(models.CommunicationChannel.id == request_data.channel_id).first()
     if not channel:
          raise HTTPException(status_code=404, detail="Channel not found")
          
-    # Enable
-    current_user.mfa_enabled = True
+    # Prepare User (but don't enable yet)
     current_user.mfa_channel_id = request_data.channel_id
+    
+    # Generate OTP
+    otp = ''.join(random.choices(string.digits, k=6))
+    current_user.login_otp = otp
+    current_user.login_otp_expires = datetime.utcnow() + timedelta(minutes=5)
     db.commit()
     
-    logger.info(f"[MFA] Enabled for user {current_user.email}")
-    log_action(
-        action=models.ActionType.PROFILE_UPDATE,
-        user=current_user,
-        details={"action": "enable_mfa", "channel": channel.name},
+    # Send OTP to confirm channel working
+    try:
+        comm_manager = ChannelManager(db)
+        provider = comm_manager.get_provider(channel)
+        if provider:
+            await provider.send(
+                to=current_user.email,
+                subject="Confirm MFA Setup",
+                body=f"Your MFA setup code is: {otp}. It expires in 5 minutes.",
+                template_data={"otp": otp}
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Invalid channel provider")
+            
+    except Exception as e:
+        logger.error(f"[MFA] Setup failed to send OTP: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send verification code")
+    
+    # Return Setup Token
+    mfa_token = security.create_access_token(
+        data={"sub": current_user.email, "scope": "mfa_setup"},
+        expires_delta=timedelta(minutes=5)
     )
     
-    # Return fresh token (optional, or just success message)
-    # Re-issuing token isn't strictly necessary but helpful
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = security.create_access_token(
-        data={"sub": current_user.email, "role": current_user.role, "scope": "access_token"},
-        expires_delta=access_token_expires
+    return schemas.Token(
+        access_token="", 
+        token_type="bearer",
+        mfa_required=True,
+        mfa_token=mfa_token
     )
-    
-    return schemas.Token(access_token=access_token, token_type="bearer")
