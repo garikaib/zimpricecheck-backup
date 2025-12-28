@@ -682,19 +682,26 @@ async def stream_backup_progress(
                     
                     yield f"data: {json.dumps(progress_data)}\n\n"
                     
-                    # Check terminal conditions
                     if site.backup_status in ["completed", "failed", "stopped", "idle"]:
                         # Give client time to receive final status
                         await asyncio.sleep(1)
-                        yield f"data: {{\"event\": \"finished\", \"status\": \"{site.backup_status}\"}}\n\n"
+                        if site.backup_status != "idle":
+                            yield f"data: {{\"event\": \"finished\", \"status\": \"{site.backup_status}\"}}\n\n"
                         break
-                    
-                    # Wait before next poll
+                        
                     await asyncio.sleep(interval)
                     
                 except Exception as e:
-                    yield f"data: {{\"event\": \"error\", \"message\": \"{str(e)}\"}}\n\n"
+                    # Inner polling error loop - separate from main loop exception
+                    logger.error(f"Polling error: {e}")
                     await asyncio.sleep(interval)
+                    
+        except asyncio.CancelledError:
+            logger.info(f"SSE stream cancelled for site {site_id}")
+            raise
+        except Exception as e:
+            logger.error(f"SSE stream error: {e}")
+            yield f"data: {{\"event\": \"error\", \"message\": \"Internal error\"}}\n\n"
         finally:
             poll_db.close()
     

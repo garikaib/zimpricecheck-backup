@@ -91,6 +91,21 @@ class WordPressModule(BackupModule):
                 duration_seconds=time.monotonic() - start_time,
             )
     
+    async def _run_command(self, cmd: List[str], timeout: int = 3600, capture_output: bool = False, stdout=None) -> subprocess.CompletedProcess:
+        """Run command in thread pool to prevent blocking asyncio loop."""
+        loop = asyncio.get_event_loop()
+        
+        def _exec():
+            return subprocess.run(
+                cmd,
+                timeout=timeout,
+                capture_output=capture_output,
+                stdout=stdout,
+                stderr=subprocess.PIPE if not capture_output else None  # Capture stderr if not capturing all output
+            )
+            
+        return await loop.run_in_executor(None, _exec)
+
     async def _backup_database(self, context: BackupContext) -> StageResult:
         """Dump MySQL database using mysqldump."""
         config = context.config
@@ -113,13 +128,20 @@ class WordPressModule(BackupModule):
         logger.info(f"Dumping database {config['db_name']} for {context.target_name}")
         
         try:
-            with open(sql_file, "w") as f:
-                result = subprocess.run(
-                    cmd,
-                    stdout=f,
-                    stderr=subprocess.PIPE,
-                    timeout=3600,  # 1 hour max
-                )
+            # Run in executor to avoid blocking
+            # We need to handle file I/O safely with the executor
+            loop = asyncio.get_event_loop()
+            
+            def _dump():
+                with open(sql_file, "w") as f:
+                    return subprocess.run(
+                        cmd,
+                        stdout=f,
+                        stderr=subprocess.PIPE,
+                        timeout=3600,
+                    )
+            
+            result = await loop.run_in_executor(None, _dump)
             
             if result.returncode != 0:
                 error = result.stderr.decode() if result.stderr else "Unknown error"
@@ -172,9 +194,8 @@ class WordPressModule(BackupModule):
                 skipped_files.append(src)
                 logger.warning(f"Skipping unreadable file: {src}")
         
-        try:
+        def _copy_tree():
             # Use dirs_exist_ok=True for Python 3.8+ resilience
-            # Exclude cache, logs, and wflogs (Wordfence logs with restricted permissions)
             shutil.copytree(
                 wp_content,
                 files_backup,
@@ -193,6 +214,11 @@ class WordPressModule(BackupModule):
                         total_size += os.path.getsize(fp)
                     except OSError:
                         pass
+            return total_size
+
+        try:
+            loop = asyncio.get_event_loop()
+            total_size = await loop.run_in_executor(None, _copy_tree)
             
             context.stage_data["files_size"] = total_size
             context.stage_data["files_path"] = files_backup
@@ -232,7 +258,13 @@ class WordPressModule(BackupModule):
                 "wp-content",
             ]
             
-            result = subprocess.run(cmd, capture_output=True, timeout=1800)
+            loop = asyncio.get_event_loop()
+            
+            # Helper to run subprocess in thread
+            def _tar():
+                return subprocess.run(cmd, capture_output=True, timeout=1800)
+                
+            result = await loop.run_in_executor(None, _tar)
             
             if result.returncode != 0:
                 error = result.stderr.decode() if result.stderr else "Unknown error"
