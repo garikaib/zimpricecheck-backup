@@ -99,6 +99,11 @@ class Node(Base):
     storage_quota_gb = Column(Integer, default=100)
     storage_used_bytes = Column(Integer, default=0)  # Track actual usage
     total_available_gb = Column(Integer, default=1000)
+    
+    # Scheduling Limits
+    max_retention_copies = Column(Integer, default=10) # Max copies per site
+    max_concurrent_backups = Column(Integer, default=2) # Max simultaneous backups per node
+    
     registration_code = Column(String(5), nullable=True, index=True)  # 5-char code for registration
     
     # Ownership (Node Admin)
@@ -136,6 +141,13 @@ class Site(Base):
     
     # Quota tracking
     quota_exceeded_at = Column(DateTime, nullable=True)  # When quota first exceeded
+    
+    # Schedule Configuration
+    schedule_frequency = Column(String, default="manual")  # manual, daily, weekly, monthly
+    schedule_time = Column(String, nullable=True)  # HH:MM (Africa/Harare)
+    schedule_days = Column(String, nullable=True)  # CSV: 0,1,2 (Mon,Tue,Wed) or 1 (Day of month)
+    retention_copies = Column(Integer, default=5)  # Number of backups to retain
+    next_run_at = Column(DateTime, nullable=True)  # Calculated next run (UTC or Aware)
     
     # Belongs to a Node
     node_id = Column(Integer, ForeignKey("nodes.id"))

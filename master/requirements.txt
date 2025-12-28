@@ -16,5 +16,4 @@ pysendpulse>=0.1.8
 sentry-sdk[fastapi]
 psutil>=5.9.0
 slowapi
-
-
+APScheduler>=3.10.0

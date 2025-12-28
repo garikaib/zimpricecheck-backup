@@ -114,6 +114,8 @@ class NodeResponse(NodeBase):
     status: str
     storage_quota_gb: int
     storage_used_bytes: int = 0
+    max_retention_copies: int = 10
+    max_concurrent_backups: int = 2
     class Config:
         from_attributes = True
 
@@ -158,6 +160,8 @@ class NodeDetailResponse(NodeBase):
     storage_used_gb: float = 0.0
     sites_count: int = 0
     backups_count: int = 0
+    max_retention_copies: int = 10
+    max_concurrent_backups: int = 2
     class Config:
         from_attributes = True
 
@@ -170,6 +174,12 @@ class NodeSimple(BaseModel):
     class Config:
         from_attributes = True
 
+class SiteScheduleUpdate(BaseModel):
+    schedule_frequency: str = "manual" # manual, daily, weekly, monthly
+    schedule_time: Optional[str] = None
+    schedule_days: Optional[str] = None
+    retention_copies: Optional[int] = None
+
 # -- Site Schemas --
 class SiteResponse(SiteBase):
     id: int
@@ -180,7 +190,16 @@ class SiteResponse(SiteBase):
     storage_used_bytes: int = 0
     storage_quota_gb: int = 10
     storage_used_gb: float = 0.0
+    storage_used_gb: float = 0.0
     last_backup: Optional[datetime] = None
+    
+    # Schedule info
+    schedule_frequency: str = "manual"
+    schedule_time: Optional[str] = None
+    schedule_days: Optional[str] = None
+    retention_copies: int = 5
+    next_run_at: Optional[datetime] = None
+    
     class Config:
         from_attributes = True
 

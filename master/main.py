@@ -99,6 +99,11 @@ except ImportError:
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+@app.on_event("startup")
+async def startup_event():
+    from master.core.scheduler import init_scheduler
+    init_scheduler(app)
+
 @app.get("/")
 def root():
     return {"message": "WordPress Backup Master API", "status": "running"}

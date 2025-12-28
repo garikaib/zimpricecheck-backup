@@ -210,3 +210,36 @@ curl -X POST "https://api.example.com/api/v1/sites/1/backup/start" \
   "backup_status": "running"
 }
 ```
+
+---
+
+## PUT /sites/{id}/schedule
+
+Update backup schedule and retention policy.
+
+### Request Body
+```json
+{
+  "schedule_frequency": "daily",
+  "schedule_time": "23:00",
+  "schedule_days": "1,3,5",
+  "retention_copies": 7
+}
+```
+- `schedule_frequency`: `manual`, `daily`, `weekly`, `monthly`.
+- `schedule_time`: `HH:MM` (Africa/Harare timezone).
+- `schedule_days`: CSV of days.
+- `retention_copies`: Max backups to keep.
+
+### Response
+```json
+{
+  "success": true,
+  "message": "Schedule updated",
+  "site_id": 1,
+  "schedule": {
+    "frequency": "daily",
+    "retention": 7
+  }
+}
+```

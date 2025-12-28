@@ -265,6 +265,77 @@ def get_site_quota_status(
     }
 
 
+@router.put("/{site_id}/schedule")
+def update_site_schedule(
+    site_id: int,
+    schedule_in: schemas.SiteScheduleUpdate,
+    db: Session = Depends(deps.get_db),
+    current_user: models.User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Update backup schedule for a site.
+    Calculates next run time immediately.
+    """
+    site = db.query(models.Site).filter(models.Site.id == site_id).first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Check access
+    if not deps.validate_site_access(current_user, site):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Update fields
+    if schedule_in.schedule_frequency:
+        if schedule_in.schedule_frequency not in ["manual", "daily", "weekly", "monthly"]:
+             raise HTTPException(status_code=400, detail="Invalid frequency")
+        site.schedule_frequency = schedule_in.schedule_frequency
+    
+    if schedule_in.schedule_time is not None:
+        # Validate HH:MM format
+        try:
+            parts = schedule_in.schedule_time.split(":")
+            if len(parts) != 2:
+                raise ValueError
+            h, m = int(parts[0]), int(parts[1])
+            if not (0 <= h <= 23 and 0 <= m <= 59):
+                raise ValueError
+        except:
+             raise HTTPException(status_code=400, detail="Invalid time format. Use HH:MM")
+        site.schedule_time = schedule_in.schedule_time
+        
+    if schedule_in.schedule_days is not None:
+        site.schedule_days = schedule_in.schedule_days
+        
+    if schedule_in.retention_copies is not None:
+        limit = schedule_in.retention_copies
+        if site.node and site.node.max_retention_copies:
+            limit = min(limit, site.node.max_retention_copies)
+        site.retention_copies = limit
+        
+    # Recalculate next run
+    try:
+        from master.core.scheduler import calculate_next_run
+        site.next_run_at = calculate_next_run(site)
+    except Exception as e:
+        # Log error but don't fail request if calculation fails (rare)
+        pass
+        
+    db.commit()
+    db.refresh(site)
+    
+    return {
+        "success": True,
+        "message": "Schedule updated",
+        "site_id": site.id,
+        "schedule": {
+            "frequency": site.schedule_frequency,
+            "time": site.schedule_time,
+            "next_run_at": site.next_run_at,
+            "retention": site.retention_copies
+        }
+    }
+
+
 @router.get("/{site_id}/quota/check")
 def check_pre_backup_quota(
     site_id: int,

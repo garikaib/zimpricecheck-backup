@@ -364,6 +364,13 @@ async def _run_real_backup(site_id: int, site_path: str, site_name: str):
         
         db.commit()
         
+        # Enforce Retention Policy (Auto-cleanup old backups)
+        try:
+            from master.core.retention import enforce_retention_policy
+            enforce_retention_policy(site_id, db)
+        except Exception as e:
+            logger.error(f"Retention enforcement failed for site {site_id}: {e}")
+        
         # Check quota and send warning if exceeded
         try:
             from master.core.quota_manager import (

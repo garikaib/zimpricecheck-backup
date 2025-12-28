@@ -97,7 +97,7 @@ deploy_master() {
         --exclude='venv' \
         --exclude='./.git' \
         --exclude='master.db' \
-        -c master daemon .env lib scripts | zstd - > bundle.tar.zst
+        -c master daemon .env lib scripts alembic alembic.ini | zstd - > bundle.tar.zst
 
     # Generate Master Setup Script
     cat > remote_setup.sh << 'REMOTE_SCRIPT'
@@ -205,6 +205,11 @@ with engine.connect() as conn:
         print(f'  Site {row[0]} assigned UUID')
     conn.commit()
 "
+
+    echo "[*] Running Alembic Migrations..."
+    if [ -f "alembic.ini" ]; then
+        ./venv/bin/alembic upgrade head || echo "[!] Alembic migration failed, continuing..."
+    fi
 
 echo "[*] Initializing Database..."
 PYTHONPATH=. ./venv/bin/python3 master/init_db.py
