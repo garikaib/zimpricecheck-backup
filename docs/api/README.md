@@ -11,6 +11,7 @@ This directory contains detailed API documentation organized by feature area.
 | [Sites](./sites.md) | Site management and backups |
 | [Backups](./backups.md) | Backup CRUD and downloads |
 | [Storage](./storage.md) | Providers, health, reconciliation |
+| [Communications](./communications.md) | Channels, providers, SMTP/SendPulse |
 | [Users](./users.md) | User management and roles |
 
 ## Base URL

@@ -13,6 +13,11 @@ from sqlalchemy.orm import Session
 from master.api import deps
 from master.db import models
 from master.core.encryption import encrypt_credential, decrypt_credential
+from master.core.communications.base import (
+    get_provider_class,
+    list_providers,
+    _providers,
+)
 from master import schemas
 
 router = APIRouter()
@@ -75,6 +80,26 @@ def get_channel(
     return channel_to_response(channel)
 
 
+@router.get("/providers", response_model=schemas.ProviderListResponse)
+def list_available_providers(
+    current_user: models.User = Depends(deps.get_current_superuser),
+):
+    """List available communication providers and their schemas. Super Admin only."""
+    response_list = []
+    
+    # Iterate through registered providers
+    for key, provider_class in _providers.items():
+        response_list.append(
+            schemas.ProviderSchemaResponse(
+                channel_type=provider_class.channel_type,
+                provider_name=provider_class.provider_name,
+                config_schema=provider_class.get_config_schema(),
+            )
+        )
+            
+    return schemas.ProviderListResponse(providers=response_list)
+
+
 @router.post("/channels", response_model=schemas.CommunicationChannelResponse)
 def create_channel(
     channel_in: schemas.CommunicationChannelCreate,
@@ -96,6 +121,21 @@ def create_channel(
         raise HTTPException(status_code=400, detail=f"Invalid channel type: {channel_in.channel_type}")
     
     # Encrypt config
+    # Validate config against provider schema
+    provider_class = get_provider_class(channel_type.value, channel_in.provider)
+    if not provider_class:
+         raise HTTPException(
+             status_code=400, 
+             detail=f"Invalid provider '{channel_in.provider}' for channel type '{channel_type.value}'"
+         )
+
+    is_valid, errors = provider_class.validate_config(channel_in.config)
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid configuration: {'; '.join(errors)}"
+        )
+
     config_encrypted = encrypt_credential(json.dumps(channel_in.config))
     
     # If setting as default, unset other defaults for this type
@@ -143,6 +183,16 @@ def update_channel(
         channel.name = channel_in.name
     
     if channel_in.config is not None:
+        # Validate new config
+        provider_class = get_provider_class(channel.channel_type.value, channel.provider)
+        if provider_class:
+            is_valid, errors = provider_class.validate_config(channel_in.config)
+            if not is_valid:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid configuration: {'; '.join(errors)}"
+                )
+        
         channel.config_encrypted = encrypt_credential(json.dumps(channel_in.config))
     
     if channel_in.allowed_roles is not None:

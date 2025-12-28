@@ -406,3 +406,13 @@ class AssignmentResponse(BaseModel):
     message: str
     assigned: List[int]
 
+
+# -- Provider Schemas --
+class ProviderSchemaResponse(BaseModel):
+    channel_type: str
+    provider_name: str
+    config_schema: dict
+
+class ProviderListResponse(BaseModel):
+    providers: List[ProviderSchemaResponse]
+
