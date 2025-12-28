@@ -211,8 +211,17 @@ with engine.connect() as conn:
         ./venv/bin/alembic upgrade head || echo "[!] Alembic migration failed, continuing..."
     fi
 
+# Fix permissions BEFORE init_db (SQLite needs write on directory + file for journal)
+echo "[*] Setting database permissions..."
+sudo chown -R "$REMOTE_USER":"$REMOTE_USER" "$INSTALL_DIR"
+chmod 755 "$INSTALL_DIR"
+[ -f "$INSTALL_DIR/master.db" ] && chmod 664 "$INSTALL_DIR/master.db"
+
 echo "[*] Initializing Database..."
 PYTHONPATH=. ./venv/bin/python3 master/init_db.py
+
+# Ensure database is writable after init creates it
+[ -f "$INSTALL_DIR/master.db" ] && chmod 664 "$INSTALL_DIR/master.db"
 
 echo "[*] Super Admin: admin@example.com (created during init)"
 
@@ -249,8 +258,10 @@ else
     exit 1
 fi
 
-echo "[*] Fixing permissions..."
+echo "[*] Final permission check..."
 sudo chown -R "$REMOTE_USER":"$REMOTE_USER" "$INSTALL_DIR"
+# Ensure database is writable by the service user
+[ -f "$INSTALL_DIR/master.db" ] && chmod 664 "$INSTALL_DIR/master.db"
 
     # Web Setup (Optional)
     if [ "$FLAG" == "--web" ]; then

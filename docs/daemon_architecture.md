@@ -10,11 +10,11 @@ The new `backupd` daemon is a modular, event-driven backup service designed to r
   - Manages the database, scheduling, and API.
   - Distributes jobs to nodes.
 - **Node Mode** (`--mode node`):
-  - Runs as a lightweight agent.
-  - Registers with the Master via API.
-  - Polls for jobs or receives commands (future: WebSocket).
-  - Executes backup modules.
-- **Auto-Detection**: The daemon detects its mode via `BACKUPD_MODE` env var or config file.
+  - Runs as a lightweight agent (dependencies minimized).
+  - DOES NOT import `master` packages to avoid heavy dependencies or circular imports.
+  - Registers with the Master via API (`POST /nodes/join-request`).
+  - Polls for jobs (`GET /jobs/poll`) and executes them.
+- **Auto-Detection**: The daemon defaults to node mode unless configured otherwise or launched via specific entry point.
 
 ### 2. Resource Manager
 To prevent system overload, `backupd` uses a centrally managed `ResourceManager` (`daemon/resource_manager.py`) with semaphores and thread pools:
@@ -28,7 +28,7 @@ Jobs are managed via a priority queue (`daemon/job_queue.py`).
 - **Priorities**: High (10) to Low (0).
 - **States**: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`.
 - **Stages**: Each job is broken down into granular stages (e.g., `backup_db`, `upload`).
-- **Resume Capability**: (Future) Jobs track their current stage for potential resumption.
+- **Resume Capability**: Jobs track their current stage for potential resumption.
 
 ### 4. Modular System
 Backup logic is encapsulated in **Modules** (`daemon/modules/`).
@@ -55,14 +55,15 @@ Stages:
 - `BACKUPD_MAX_NETWORK`: Max concurrent network ops
 - `BACKUPD_MAX_BANDWIDTH_MBPS`: Upload speed limit
 
-### Node Registration
-1. **Startup**: Node generates a random 5-character code (e.g., `XC9D2`).
-2. **Display**: Code is logged/displayed on the node console.
-3. **Approval**: Admin enters this code in the Master Dashboard.
-4. **Activation**: Master verifies code, sets IP, and activates the node.
-5. **Auth**: Node receives a permanent API Key for future requests.
+### Node Registration Flow
+1. **Startup**: Node starts up with `BACKUPD_MASTER_URL` configured.
+2. **Join Request**: Daemon sends a join request to Master.
+3. **Approval**: 
+   - Master receives request (Status: PENDING).
+   - Admin approves node via Dashboard/API.
+4. **Activation**: Node receives confirmation and begins polling for tasks (Status: ACTIVE).
 
 ## Storage Security
 - **Providers**: Configured centrally on the Master.
 - **Encryption**: Credentials (Access/Secret keys) are encrypted at rest using Fernet (symmetric).
-- **Distribution**: Nodes fetch decrypted credentials *only* for the assigned provider when needed.
+- **Distribution**: Nodes fetch decrypted credentials *only* for the assigned provider during job execution.

@@ -13,6 +13,7 @@ import argparse
 import logging
 import signal
 import sys
+import os
 from typing import Optional
 
 from daemon.config import load_config, DaemonMode, DaemonConfig
@@ -23,7 +24,43 @@ from daemon.modules.base import get_module, list_modules, BackupContext
 # Import modules to register them
 import daemon.modules.wordpress  # noqa
 
+# Import StageStatus for run_job
+from daemon.job_queue import StageStatus
+
 logger = logging.getLogger(__name__)
+
+
+def setup_logging():
+    """Configure logging for the daemon."""
+    import logging.handlers
+    
+    # Create log directory
+    log_dir = "logs"
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+        
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    
+    # Format
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
+    
+    # Console handler
+    console = logging.StreamHandler(sys.stdout)
+    console.setFormatter(formatter)
+    root_logger.addHandler(console)
+    
+    # File handler
+    file_handler = logging.handlers.RotatingFileHandler(
+        os.path.join(log_dir, "backupd.log"),
+        maxBytes=10*1024*1024,
+        backupCount=5
+    )
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
 
 
 class BackupDaemon:
@@ -178,10 +215,6 @@ class BackupDaemon:
         get_resource_manager().shutdown()
 
 
-# Import StageStatus for run_job
-from daemon.job_queue import StageStatus
-
-
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Backupd - Modular Backup Daemon")
@@ -202,8 +235,7 @@ def main():
     )
     args = parser.parse_args()
     
-    # Configure logging with file handlers
-    from master.core.logging_config import setup_logging
+    # Configure logging locally for node (master module not available on nodes)
     setup_logging()
     
     # Load config
