@@ -87,6 +87,9 @@ def test_password_policy(client):
 
 def test_mfa_flow(client, db):
     # Setup: Create user and channel
+    from master.core.encryption import encrypt_credential
+    import json
+    
     user = models.User(
         email="mfa_user@example.com",
         hashed_password=get_password_hash("StrongPass123!"),
@@ -97,11 +100,22 @@ def test_mfa_flow(client, db):
     db.add(user)
     db.commit() # Initial commit to get ID
     
+    # Create a valid encrypted config for the SMTP channel
+    smtp_config = {
+        "host": "smtp.test.com",
+        "port": 587,
+        "encryption": "tls",
+        "username": "test@test.com",
+        "password": "testpassword",
+        "from_email": "noreply@test.com",
+        "from_name": "Test"
+    }
+    
     channel = models.CommunicationChannel(
         name="Test Email",
         channel_type=models.ChannelType.EMAIL,
         provider="smtp",
-        config_encrypted="dummy",
+        config_encrypted=encrypt_credential(json.dumps(smtp_config)),
         is_default=True
     )
     db.add(channel)
