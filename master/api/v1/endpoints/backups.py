@@ -23,7 +23,7 @@ def list_site_backups(
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(deps.get_db),
-    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+    current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     List all backups for a specific site.
@@ -33,10 +33,9 @@ def list_site_backups(
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
     
-    # Access check for Node Admins
-    if current_user.role == models.UserRole.NODE_ADMIN:
-        if site.node_id not in [n.id for n in current_user.nodes]:
-            raise HTTPException(status_code=403, detail="Access denied")
+    # Check access (Super Admin, Node Admin, or assigned Site Admin)
+    if not deps.validate_site_access(current_user, site):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     # Query backups
     query = db.query(models.Backup).filter(models.Backup.site_id == site_id)
@@ -112,7 +111,7 @@ def list_scheduled_deletions(
 def get_backup_detail(
     backup_id: int,
     db: Session = Depends(deps.get_db),
-    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+    current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get detailed information about a specific backup.
@@ -125,10 +124,9 @@ def get_backup_detail(
     if not site:
         raise HTTPException(status_code=404, detail="Associated site not found")
     
-    # Access check for Node Admins
-    if current_user.role == models.UserRole.NODE_ADMIN:
-        if site.node_id not in [n.id for n in current_user.nodes]:
-            raise HTTPException(status_code=403, detail="Access denied")
+    # Check access (Super Admin, Node Admin, or assigned Site Admin)
+    if not deps.validate_site_access(current_user, site):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     provider_detail = None
     if backup.provider:
@@ -256,7 +254,7 @@ def cancel_scheduled_deletion(
 def get_backup_download_url(
     backup_id: int,
     db: Session = Depends(deps.get_db),
-    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+    current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Generate a presigned download URL for a backup.
@@ -269,10 +267,9 @@ def get_backup_download_url(
     if not site:
         raise HTTPException(status_code=404, detail="Associated site not found")
     
-    # Access check for Node Admins
-    if current_user.role == models.UserRole.NODE_ADMIN:
-        if site.node_id not in [n.id for n in current_user.nodes]:
-            raise HTTPException(status_code=403, detail="Access denied")
+    # Check access (Super Admin, Node Admin, or assigned Site Admin)
+    if not deps.validate_site_access(current_user, site):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     if not backup.provider:
         raise HTTPException(status_code=400, detail="No storage provider associated with this backup")
