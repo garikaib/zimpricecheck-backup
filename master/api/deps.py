@@ -71,19 +71,12 @@ def get_current_user(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme)
 ) -> models.User:
-    print(f"[AUTH] Token validation starting...")
-    print(f"[AUTH] Token (first 50 chars): {token[:50] if len(token) > 50 else token}...")
-    print(f"[AUTH] Using SECRET_KEY (first 10 chars): {settings.SECRET_KEY[:10]}...")
-    print(f"[AUTH] Using ALGORITHM: {settings.ALGORITHM}")
-    
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        print(f"[AUTH] Token decoded successfully!")
-        print(f"[AUTH] Payload: {payload}")
+
         
         email: str = payload.get("sub")
         if email is None:
-            print("[AUTH] Token missing 'sub' claim!")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token: missing 'sub' claim",
@@ -91,24 +84,21 @@ def get_current_user(
             )
         
         token_data = schemas.TokenData(email=email)
-        print(f"[AUTH] Looking up user with email: {email}")
         
     except jwt.ExpiredSignatureError:
-        print("[AUTH] Token has expired!")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except jwt.JWTClaimsError as e:
-        print(f"[AUTH] JWT claims error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token claims: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except JWTError as e:
-        print(f"[AUTH] JWT decode error: {type(e).__name__}: {e}")
+        logger.error(f"JWT decode error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Could not validate credentials: {str(e)}",
@@ -117,14 +107,12 @@ def get_current_user(
     
     user = db.query(models.User).filter(models.User.email == token_data.email).first()
     if user is None:
-        print(f"[AUTH] User not found in database: {token_data.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    print(f"[AUTH] User authenticated successfully: {user.email} (role: {user.role})")
     return user
 
 def get_current_active_user(
@@ -162,9 +150,8 @@ def get_current_node(
     Authenticate node via X-API-KEY header.
     Used for node-to-master API calls (e.g., fetching storage config).
     """
-    print(f"[NODE AUTH] get_current_node called")
     api_key = request.headers.get("X-API-KEY")
-    print(f"[NODE AUTH] X-API-KEY: {api_key[:20]}..." if api_key else "[NODE AUTH] X-API-KEY: None")
+
     
     if not api_key:
         raise HTTPException(

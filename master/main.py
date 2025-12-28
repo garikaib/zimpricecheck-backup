@@ -7,6 +7,9 @@ from master.core.config import get_settings
 from master.core.logging_config import setup_logging, get_logger
 from master.api.v1.endpoints import auth, nodes, stats, users, sites, activity_logs, settings as settings_router, storage, communications, backups, logs, metrics
 from fastapi import APIRouter
+from master.core.rate_limiter import limiter
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 # Initialize Sentry for error tracking
 sentry_sdk.init(
@@ -32,6 +35,10 @@ app = FastAPI(
     title=settings.APP_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+
+# Rate Limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Debug middleware to log headers for /nodes/ requests
 class HeaderLoggingMiddleware(BaseHTTPMiddleware):

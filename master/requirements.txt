@@ -15,5 +15,6 @@ boto3
 pysendpulse>=0.1.8
 sentry-sdk[fastapi]
 psutil>=5.9.0
+slowapi
 
 

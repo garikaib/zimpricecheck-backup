@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from master.api import deps
 from master.db import models
-from master.core.security import encrypt_value, decrypt_value
+from master.core.encryption import encrypt_credential, decrypt_credential
 from master import schemas
 
 router = APIRouter()
@@ -96,7 +96,7 @@ def create_channel(
         raise HTTPException(status_code=400, detail=f"Invalid channel type: {channel_in.channel_type}")
     
     # Encrypt config
-    config_encrypted = encrypt_value(json.dumps(channel_in.config))
+    config_encrypted = encrypt_credential(json.dumps(channel_in.config))
     
     # If setting as default, unset other defaults for this type
     if channel_in.is_default:
@@ -143,7 +143,7 @@ def update_channel(
         channel.name = channel_in.name
     
     if channel_in.config is not None:
-        channel.config_encrypted = encrypt_value(json.dumps(channel_in.config))
+        channel.config_encrypted = encrypt_credential(json.dumps(channel_in.config))
     
     if channel_in.allowed_roles is not None:
         channel.allowed_roles = json.dumps(channel_in.allowed_roles)

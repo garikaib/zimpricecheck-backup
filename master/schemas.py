@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime
 from master.db.models import UserRole
@@ -12,6 +12,23 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v):
+        """Enforce strong password policy."""
+        import re
+        if len(v) < 12:
+            raise ValueError('Password must be at least 12 characters')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain lowercase letter')
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain a digit')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain special character')
+        return v
 
 class UserResponse(UserBase):
     id: int
@@ -43,6 +60,8 @@ class LoginRequest(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    mfa_required: bool = False
+    mfa_token: Optional[str] = None
 
 class TokenData(BaseModel):
     email: Optional[str] = None
@@ -338,11 +357,21 @@ class CommunicationTestResponse(BaseModel):
 # -- Verification Schemas --
 class VerifyEmailRequest(BaseModel):
     code: str
+    token: Optional[str] = None  # Verification token for IDOR protection
 
 
 class VerifyEmailResponse(BaseModel):
     success: bool
     message: str
+
+
+# -- MFA Schemas --
+class MfaEnableRequest(BaseModel):
+    channel_id: int
+
+class MfaVerifyRequest(BaseModel):
+    code: str
+    mfa_token: Optional[str] = None
 
 
 class ResendVerificationRequest(BaseModel):

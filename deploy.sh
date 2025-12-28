@@ -168,6 +168,31 @@ with engine.connect() as conn:
         conn.commit()
         print('  Added scheduled_deletion to backups')
     except: pass
+
+    # Add MFA fields
+    try:
+        conn.execute(text('ALTER TABLE users ADD COLUMN mfa_enabled BOOLEAN DEFAULT 0'))
+        conn.commit()
+        print('  Added mfa_enabled')
+    except: pass
+    
+    try:
+        conn.execute(text('ALTER TABLE users ADD COLUMN mfa_channel_id INTEGER REFERENCES communication_channels(id)'))
+        conn.commit()
+        print('  Added mfa_channel_id')
+    except: pass
+    
+    try:
+        conn.execute(text('ALTER TABLE users ADD COLUMN login_otp VARCHAR'))
+        conn.commit()
+        print('  Added login_otp')
+    except: pass
+    
+    try:
+        conn.execute(text('ALTER TABLE users ADD COLUMN login_otp_expires DATETIME'))
+        conn.commit()
+        print('  Added login_otp_expires')
+    except: pass
     
     # Generate UUIDs for existing records
     for row in conn.execute(text('SELECT id FROM nodes WHERE uuid IS NULL')):

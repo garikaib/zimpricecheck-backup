@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 
 from master.db import models
-from master.core.security import decrypt_value
+from master.core.encryption import decrypt_credential
 from master.core.communications.base import (
     CommunicationProvider,
     MessageResult,
@@ -89,7 +89,7 @@ class ChannelManager:
         if not channel.config_encrypted:
             return {}
         try:
-            decrypted = decrypt_value(channel.config_encrypted)
+            decrypted = decrypt_credential(channel.config_encrypted)
             return json.loads(decrypted)
         except Exception as e:
             logger.error(f"Failed to decrypt channel config: {e}")

@@ -1,7 +1,8 @@
 from master.core.config import get_settings
 from master.db.session import SessionLocal, engine
 from master.db import models
-from master.core.security import get_password_hash, encrypt_value
+from master.core.security import get_password_hash
+from master.core.encryption import encrypt_credential
 import secrets
 import socket
 import json
@@ -79,7 +80,7 @@ def init_db():
             name="SendPulse API",
             channel_type=models.ChannelType.EMAIL,
             provider="sendpulse_api",
-            config_encrypted=encrypt_value(json.dumps(config)),
+            config_encrypted=encrypt_credential(json.dumps(config)),
             allowed_roles=json.dumps(["verification", "notification", "alert", "login_link"]),
             is_default=True,
             priority=1,
@@ -100,7 +101,7 @@ def init_db():
             name="SendPulse SMTP",
             channel_type=models.ChannelType.EMAIL,
             provider="smtp",
-            config_encrypted=encrypt_value(json.dumps(smtp_config)),
+            config_encrypted=encrypt_credential(json.dumps(smtp_config)),
             allowed_roles=json.dumps(["verification", "notification", "alert", "login_link"]),
             is_default=False,
             priority=10,  # Lower priority (fallback)

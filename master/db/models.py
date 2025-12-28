@@ -62,10 +62,16 @@ class User(Base):
     email_verification_code = Column(String, nullable=True)
     email_verification_expires = Column(DateTime, nullable=True)
     pending_email = Column(String, nullable=True)
-    
+
     # Magic link login
     magic_link_token = Column(String, nullable=True, index=True)
     magic_link_expires = Column(DateTime, nullable=True)
+
+    # MFA
+    mfa_enabled = Column(Boolean, default=False)
+    mfa_channel_id = Column(Integer, ForeignKey("communication_channels.id"), nullable=True)
+    login_otp = Column(String, nullable=True)
+    login_otp_expires = Column(DateTime, nullable=True)
     
     # Relationships (admin ownership)
     nodes = relationship("Node", back_populates="admin")
