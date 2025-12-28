@@ -128,6 +128,12 @@ class Site(Base):
     backup_message = Column(String, nullable=True)
     backup_error = Column(String, nullable=True)
     
+    # Granular stage tracking
+    backup_stage = Column(String, nullable=True)  # Current stage name: backup_db, backup_files, etc.
+    backup_stage_detail = Column(String, nullable=True)  # Sub-step: "Exporting table wp_posts..."
+    backup_bytes_processed = Column(Integer, default=0)  # Bytes processed in current stage
+    backup_bytes_total = Column(Integer, default=0)  # Total bytes expected
+    
     # Quota tracking
     quota_exceeded_at = Column(DateTime, nullable=True)  # When quota first exceeded
     

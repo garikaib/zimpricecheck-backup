@@ -1,6 +1,6 @@
 from typing import Any, List, Dict
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from master import schemas
 from master.api import deps
@@ -322,6 +322,7 @@ def check_pre_backup_quota(
 @router.post("/{site_id}/backup/start")
 async def start_site_backup(
     site_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
     current_user: models.User = Depends(deps.get_current_active_user),
 ):
@@ -344,10 +345,6 @@ async def start_site_backup(
     # Import and call daemon API directly (same server)
     try:
         from daemon.api import start_backup, BackupStartRequest
-        from fastapi import BackgroundTasks
-        
-        # Create a BackgroundTasks instance
-        bg = BackgroundTasks()
         
         request = BackupStartRequest(
             site_id=site.id,
@@ -355,7 +352,8 @@ async def start_site_backup(
             site_name=site.name,
         )
         
-        result = await start_backup(request, bg, db)
+        # Pass the injected background_tasks so FastAPI processes them
+        result = await start_backup(request, background_tasks, db)
         
         return result
         

@@ -282,12 +282,19 @@ async def _run_real_backup(site_id: int, site_path: str, site_name: str):
             db.refresh(site)
             if site.backup_status == "stopped":
                 logger.info(f"Backup stopped by user at stage {stage}")
+                # Run cleanup before exiting
+                try:
+                    await wp_module.execute_stage("cleanup", context)
+                except:
+                    pass
                 return
             
-            # Update progress
+            # Update progress with granular stage info
             progress = int(((i) / total_stages) * 100)
             site.backup_progress = progress
-            site.backup_message = f"Running: {stage}"
+            site.backup_stage = stage
+            site.backup_stage_detail = f"Starting {stage}..."
+            site.backup_message = f"Stage {i+1}/{total_stages}: {stage}"
             db.commit()
             
             logger.info(f"[{site_name}] Stage {i+1}/{total_stages}: {stage}")
@@ -295,12 +302,23 @@ async def _run_real_backup(site_id: int, site_path: str, site_name: str):
             # Execute stage
             result = await wp_module.execute_stage(stage, context)
             
+            # Update with result
+            site.backup_stage_detail = result.message
+            db.commit()
+            
             if result.status.value == "failed":
                 site.backup_status = "failed"
+                site.backup_stage = stage
+                site.backup_stage_detail = f"Failed: {result.message}"
                 site.backup_message = f"Failed at {stage}"
                 site.backup_error = result.message
                 db.commit()
                 logger.error(f"Backup failed at stage {stage}: {result.message}")
+                # Run cleanup on failure
+                try:
+                    await wp_module.execute_stage("cleanup", context)
+                except:
+                    pass
                 return
             
             logger.info(f"[{site_name}] Stage {stage} completed: {result.message}")
@@ -509,6 +527,10 @@ async def get_backup_status(
         "progress": site.backup_progress,
         "message": site.backup_message,
         "error": site.backup_error,
+        "stage": site.backup_stage,
+        "stage_detail": site.backup_stage_detail,
+        "bytes_processed": site.backup_bytes_processed,
+        "bytes_total": site.backup_bytes_total,
         "started_at": site.backup_started_at.isoformat() if site.backup_started_at else None,
     }
 
