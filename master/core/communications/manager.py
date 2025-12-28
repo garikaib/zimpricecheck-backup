@@ -112,6 +112,17 @@ class ChannelManager:
             return None
         
         config = self._get_decrypted_config(channel)
+        
+        # Validate config before creating provider
+        if not config:
+            logger.error(f"Empty config for channel {channel.name} (id={channel.id})")
+            return None
+        
+        is_valid, errors = provider_class.validate_config(config)
+        if not is_valid:
+            logger.error(f"Invalid config for channel {channel.name}: {errors}")
+            return None
+        
         return provider_class(config)
     
     async def send_message(

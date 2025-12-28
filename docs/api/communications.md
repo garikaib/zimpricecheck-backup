@@ -133,3 +133,42 @@ Send a test message through a specific channel to verify configuration.
   "to": "admin@example.com"
 }
 ```
+
+**Success Response** (200):
+```json
+{
+  "success": true,
+  "message": "Test message sent successfully"
+}
+```
+
+**Error Response** (500):
+```json
+{
+  "detail": "Test failed: <error message>"
+}
+```
+
+## Troubleshooting
+
+### "Failed to decrypt channel config"
+
+**Cause**: The channel's encrypted configuration is corrupted, empty, or was encrypted with a different `SECRET_KEY`.
+
+**Fix**:
+1. Re-save the channel configuration via `PUT /communications/channels/{id}` with complete `config` object.
+2. Ensure `SECRET_KEY` in `.env` hasn't changed since the channel was created.
+
+### "Empty config for channel" / "Invalid config for channel"
+
+**Cause**: The channel configuration is missing required fields (e.g., `from_email`, `host`, `password`).
+
+**Fix**:
+1. Check provider schema via `GET /communications/providers`.
+2. Update the channel with all required fields.
+
+### "KeyError: 'from_email'" or similar
+
+**Cause**: A required configuration field is missing. The system now validates configs before use, so this error should show as "Invalid config" instead.
+
+**Fix**: Update the channel with the missing field.

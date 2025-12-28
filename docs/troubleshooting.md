@@ -92,3 +92,16 @@ rm /etc/backupd/config.json  # Delete identity
 rm /etc/backupd/uuid         # Delete UUID
 sudo systemctl start wordpress-backup-daemon
 ```
+
+### 6. Communication Channel Test Fails
+
+**Symptom**: `POST /communications/channels/{id}/test` returns error like "Failed to decrypt channel config" or "Invalid config".
+
+**Check**:
+1. Check if `SECRET_KEY` in `.env` matches what was used when the channel was created.
+2. Verify the channel has all required config fields via `GET /communications/providers`.
+
+**Fix**:
+- Re-save the channel configuration with all required fields via `PUT /communications/channels/{id}`.
+- See [Communications API Troubleshooting](api/communications.md#troubleshooting) for details.
+
