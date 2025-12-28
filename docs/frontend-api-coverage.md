@@ -6,7 +6,9 @@ Base URL: `https://wp.zimpricecheck.com:8081/api/v1`
 
 | Endpoint | Method | Auth | Request | Response |
 |----------|--------|------|---------|----------|
-| `/auth/login` | POST | None | `{username, password}` | `{access_token, token_type}` |
+| `/auth/login` | POST | None | `{username, password}` | `{access_token, token_type}` OR `{mfa_required, mfa_token}` |
+| `/auth/mfa/enable` | POST | Bearer | `{channel_id}` | `{access_token, token_type}` |
+| `/auth/mfa/verify` | POST | None (use mfa_token) | `{code, mfa_token}` | `{access_token, token_type}` |
 
 ---
 
