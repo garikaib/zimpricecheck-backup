@@ -4,17 +4,17 @@
 
 set -e
 
-BASE_URL="${API_URL:-https://wp.zimpricecheck.com:8081}"
-EMAIL="admin@example.com"
-PASSWORD="admin123"
+API_URL="${API_URL:-https://wp.zimpricecheck.com:8081}/api/v1"
+EMAIL="${EMAIL:-garikaib@gmail.com}"
+PASSWORD="${PASSWORD:-Boh678p...}"
 
 echo "=== Quota Management Test Suite ==="
-echo "API: $BASE_URL"
+echo "API: $API_URL"
 echo ""
 
 # Get token
-echo "[1/5] Authenticating..."
-TOKEN=$(curl -s -X POST "$BASE_URL/api/v1/auth/login" \
+echo "[1/6] Authenticating..."
+TOKEN=$(curl -s -X POST "$API_URL/auth/login" \
   -H "Content-Type: application/json" \
   -d "{\"username\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" | jq -r '.access_token')
 
@@ -26,8 +26,8 @@ echo "  ✓ Authenticated"
 
 # Get site info with node_uuid
 echo ""
-echo "[2/5] Testing site endpoint returns node_uuid..."
-SITE=$(curl -s "$BASE_URL/api/v1/sites/" -H "Authorization: Bearer $TOKEN" | jq '.sites[0]')
+echo "[2/6] Testing site endpoint returns node_uuid..."
+SITE=$(curl -s "$API_URL/sites/" -H "Authorization: Bearer $TOKEN" | jq '.sites[0]')
 SITE_ID=$(echo "$SITE" | jq -r '.id')
 NODE_UUID=$(echo "$SITE" | jq -r '.node_uuid')
 SITE_UUID=$(echo "$SITE" | jq -r '.uuid')
@@ -44,10 +44,25 @@ else
     echo "  ✗ FAIL: uuid not returned"
 fi
 
+# Test quota status endpoint
+echo ""
+echo "[3/6] Testing quota status endpoint..."
+QUOTA_STATUS=$(curl -s "$API_URL/sites/$SITE_ID/quota/status" -H "Authorization: Bearer $TOKEN")
+USAGE_PERCENT=$(echo "$QUOTA_STATUS" | jq -r '.usage_percent')
+CAN_BACKUP=$(echo "$QUOTA_STATUS" | jq -r '.can_backup')
+
+if [ "$USAGE_PERCENT" != "null" ] && [ -n "$USAGE_PERCENT" ]; then
+    echo "  ✓ Quota status returned: ${USAGE_PERCENT}% used"
+    echo "  ✓ Can backup: $CAN_BACKUP"
+else
+    echo "  ✗ FAIL: quota status endpoint error"
+    echo "$QUOTA_STATUS" | jq '.'
+fi
+
 # Test quota update with valid value
 echo ""
-echo "[3/5] Testing valid quota update..."
-RESPONSE=$(curl -s -X PUT "$BASE_URL/api/v1/sites/$SITE_ID/quota?quota_gb=15" \
+echo "[4/6] Testing valid quota update..."
+RESPONSE=$(curl -s -X PUT "$API_URL/sites/$SITE_ID/quota?quota_gb=15" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json")
 
@@ -62,8 +77,8 @@ fi
 
 # Test quota validation (try to exceed node quota)
 echo ""
-echo "[4/5] Testing quota validation (should reject 500GB)..."
-RESPONSE=$(curl -s -X PUT "$BASE_URL/api/v1/sites/$SITE_ID/quota?quota_gb=500" \
+echo "[5/6] Testing quota validation (should reject 500GB)..."
+RESPONSE=$(curl -s -X PUT "$API_URL/sites/$SITE_ID/quota?quota_gb=500" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json")
 
@@ -77,7 +92,7 @@ fi
 
 # Show current storage status
 echo ""
-echo "[5/5] Current storage status..."
+echo "[6/6] Current storage status..."
 echo "$SITE" | jq '{
   site_name: .name,
   site_uuid: .uuid,

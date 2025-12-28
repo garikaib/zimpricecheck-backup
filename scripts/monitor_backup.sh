@@ -1,9 +1,12 @@
 #!/bin/bash
 # Monitor backup progress until complete (polls every 30 seconds)
+# Uses the modern /sites/{id}/backup/status endpoint
 
-API_URL="https://wp.zimpricecheck.com:8081/api/v1"
+API_URL="${API_URL:-https://wp.zimpricecheck.com:8081}/api/v1"
 SITE_ID="${1:-1}"
 POLL_INTERVAL="${2:-30}"  # seconds between polls
+EMAIL="${EMAIL:-garikaib@gmail.com}"
+PASSWORD="${PASSWORD:-Boh678p...}"
 
 echo "=== Monitoring Backup for Site $SITE_ID ==="
 echo "Poll interval: ${POLL_INTERVAL}s"
@@ -13,7 +16,7 @@ echo ""
 # Get token
 TOKEN=$(curl -s -X POST "$API_URL/auth/login" \
     -H "Content-Type: application/json" \
-    -d '{"username":"admin@example.com","password":"admin123"}' | jq -r '.access_token')
+    -d "{\"username\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" | jq -r '.access_token')
 
 if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
     echo "ERROR: Failed to get auth token"
@@ -28,8 +31,8 @@ while true; do
     ELAPSED_MIN=$((ELAPSED / 60))
     ELAPSED_SEC=$((ELAPSED % 60))
     
-    # Get status
-    RESULT=$(curl -s "$API_URL/daemon/backup/status/$SITE_ID" -H "Authorization: Bearer $TOKEN")
+    # Get status using the sites API endpoint
+    RESULT=$(curl -s "$API_URL/sites/$SITE_ID/backup/status" -H "Authorization: Bearer $TOKEN")
     
     STATUS=$(echo $RESULT | jq -r '.status')
     PROGRESS=$(echo $RESULT | jq -r '.progress')

@@ -410,10 +410,10 @@ async def get_site_backup_status(
     # Also get live status from daemon
     try:
         from daemon.api import get_backup_status
-        daemon_status = await get_backup_status()
+        daemon_status = await get_backup_status(site_id, db)
         
         # Sync status to site if it's for this site
-        if daemon_status.get("current_site") == site.name:
+        if daemon_status.get("site_name") == site.name:
             site.backup_status = daemon_status.get("status", "idle")
             site.backup_progress = daemon_status.get("progress", 0)
             site.backup_message = daemon_status.get("message")
