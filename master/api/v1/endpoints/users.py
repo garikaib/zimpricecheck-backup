@@ -66,7 +66,7 @@ def update_current_user(
         details={"fields_updated": list(update_data.keys())},
     )
     
-    return current_user
+    return user_to_response(current_user)
 
 
 @router.get("/", response_model=schemas.UserListResponse)
@@ -188,7 +188,7 @@ async def create_user(
         details={"role": str(user.role)},
     )
     
-    return user
+    return user_to_response(user)
 
 
 @router.get("/{user_id}", response_model=schemas.UserResponse)
@@ -226,7 +226,7 @@ def read_user(
         if not has_access:
             raise HTTPException(status_code=403, detail="Cannot view this user")
     
-    return user
+    return user_to_response(user)
 
 
 @router.put("/{user_id}", response_model=schemas.UserResponse)
@@ -284,7 +284,7 @@ def update_user(
     
     db.commit()
     db.refresh(user)
-    return user
+    return user_to_response(user)
 
 
 @router.delete("/{user_id}", response_model=schemas.UserResponse)
@@ -317,7 +317,7 @@ def delete_user(
         target_name=deleted_email,
     )
     
-    return user
+    return user_to_response(user)
 
 
 @router.post("/{user_id}/verify-email", response_model=schemas.VerifyEmailResponse)
