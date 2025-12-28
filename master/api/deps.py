@@ -173,3 +173,43 @@ def get_current_node(
         )
     
     return node
+
+
+def validate_node_access(user: models.User, node_id: int) -> bool:
+    """
+    Validate if user has access to a specific node.
+    - Super Admin: Access all
+    - Node Admin: Access assigned nodes
+    - Site Admin: No access to nodes directly
+    """
+    if user.role == models.UserRole.SUPER_ADMIN:
+        return True
+        
+    if user.role == models.UserRole.NODE_ADMIN:
+        # Check if node is assigned
+        return any(n.id == node_id for n in user.assigned_nodes)
+        
+    return False
+
+
+def validate_site_access(user: models.User, site: models.Site) -> bool:
+    """
+    Validate if user has access to a specific site.
+    - Super Admin: Access all
+    - Node Admin: Access sites on assigned nodes
+    - Site Admin: Access assigned sites
+    """
+    if user.role == models.UserRole.SUPER_ADMIN:
+        return True
+        
+    if user.role == models.UserRole.NODE_ADMIN:
+        # Check if site's node is assigned to this admin
+        if not site.node_id:
+            return False
+        return any(n.id == site.node_id for n in user.assigned_nodes)
+        
+    if user.role == models.UserRole.SITE_ADMIN:
+        # Check if site is assigned
+        return any(s.id == site.id for s in user.assigned_sites)
+        
+    return False

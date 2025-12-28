@@ -1,224 +1,445 @@
-2025-12-28 03:14:11 [INFO] master.core.logging_config: Logging initialized: level=INFO, dir=/home/garikaib/Documents/source/wordpress-backup/logs
-2025-12-28 03:14:11 [INFO] master.main: Sentry error tracking initialized
-2025-12-28 03:14:12 [INFO] daemon.modules.base: Registered backup module: wordpress
-2025-12-28 03:14:12 [INFO] daemon.api: Running startup cleanup for orphaned backup directories...
-2025-12-28 03:14:12 [INFO] daemon.api: Startup cleanup: no orphaned backup directories found
-WARNING: Using default SECRET_KEY. Please set SECRET_KEY in .env
 ============================= test session starts ==============================
-platform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0
+platform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0 -- /home/garikaib/Documents/source/wordpress-backup/venv/bin/python
+cachedir: .pytest_cache
 rootdir: /home/garikaib/Documents/source/wordpress-backup
 plugins: anyio-4.12.0
-collected 4 items
+collecting ... collected 4 items
 
-tests/test_auth.py 2025-12-28 03:14:12 [INFO] slowapi: Storage has been reset and all limits cleared
-2025-12-28 03:14:13 [INFO] master.api.v1.endpoints.auth: [LOGIN] Login attempt for: ratelimit@example.com
-2025-12-28 03:14:14 [WARNING] master.api.v1.endpoints.auth: [LOGIN] Failed login attempt for: ratelimit@example.com
-2025-12-28 03:14:14 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 400 Bad Request"
-2025-12-28 03:14:14 [INFO] master.api.v1.endpoints.auth: [LOGIN] Login attempt for: ratelimit@example.com
-2025-12-28 03:14:15 [WARNING] master.api.v1.endpoints.auth: [LOGIN] Failed login attempt for: ratelimit@example.com
-2025-12-28 03:14:15 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 400 Bad Request"
-2025-12-28 03:14:15 [INFO] master.api.v1.endpoints.auth: [LOGIN] Login attempt for: ratelimit@example.com
-2025-12-28 03:14:15 [WARNING] master.api.v1.endpoints.auth: [LOGIN] Failed login attempt for: ratelimit@example.com
-2025-12-28 03:14:15 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 400 Bad Request"
-2025-12-28 03:14:15 [INFO] master.api.v1.endpoints.auth: [LOGIN] Login attempt for: ratelimit@example.com
-2025-12-28 03:14:16 [WARNING] master.api.v1.endpoints.auth: [LOGIN] Failed login attempt for: ratelimit@example.com
-2025-12-28 03:14:16 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 400 Bad Request"
-2025-12-28 03:14:16 [INFO] master.api.v1.endpoints.auth: [LOGIN] Login attempt for: ratelimit@example.com
-2025-12-28 03:14:17 [WARNING] master.api.v1.endpoints.auth: [LOGIN] Failed login attempt for: ratelimit@example.com
-2025-12-28 03:14:17 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 400 Bad Request"
-2025-12-28 03:14:17 [WARNING] slowapi: ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /api/v1/auth/login
-2025-12-28 03:14:17 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 429 Too Many Requests"
-[ActivityLog] Error logging action: (sqlite3.OperationalError) no such table: activity_logs
-[SQL: INSERT INTO activity_logs (user_id, user_email, action, target_type, target_id, target_name, details, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
-[parameters: (None, 'ratelimit@example.com', 'LOGIN_FAILED', None, None, None, '{"reason": "invalid_credentials"}', 'unknown', 'testclient', '2025-12-28 01:14:14.498231')]
-(Background on this error at: https://sqlalche.me/e/20/e3q8)
-[ActivityLog] Error logging action: (sqlite3.OperationalError) no such table: activity_logs
-[SQL: INSERT INTO activity_logs (user_id, user_email, action, target_type, target_id, target_name, details, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
-[parameters: (None, 'ratelimit@example.com', 'LOGIN_FAILED', None, None, None, '{"reason": "invalid_credentials"}', 'unknown', 'testclient', '2025-12-28 01:14:15.158488')]
-(Background on this error at: https://sqlalche.me/e/20/e3q8)
-[ActivityLog] Error logging action: (sqlite3.OperationalError) no such table: activity_logs
-[SQL: INSERT INTO activity_logs (user_id, user_email, action, target_type, target_id, target_name, details, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
-[parameters: (None, 'ratelimit@example.com', 'LOGIN_FAILED', None, None, None, '{"reason": "invalid_credentials"}', 'unknown', 'testclient', '2025-12-28 01:14:15.848664')]
-(Background on this error at: https://sqlalche.me/e/20/e3q8)
-[ActivityLog] Error logging action: (sqlite3.OperationalError) no such table: activity_logs
-[SQL: INSERT INTO activity_logs (user_id, user_email, action, target_type, target_id, target_name, details, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
-[parameters: (None, 'ratelimit@example.com', 'LOGIN_FAILED', None, None, None, '{"reason": "invalid_credentials"}', 'unknown', 'testclient', '2025-12-28 01:14:16.453649')]
-(Background on this error at: https://sqlalche.me/e/20/e3q8)
-[ActivityLog] Error logging action: (sqlite3.OperationalError) no such table: activity_logs
-[SQL: INSERT INTO activity_logs (user_id, user_email, action, target_type, target_id, target_name, details, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
-[parameters: (None, 'ratelimit@example.com', 'LOGIN_FAILED', None, None, None, '{"reason": "invalid_credentials"}', 'unknown', 'testclient', '2025-12-28 01:14:17.040990')]
-(Background on this error at: https://sqlalche.me/e/20/e3q8)
-.2025-12-28 03:14:17 [INFO] slowapi: Storage has been reset and all limits cleared
-2025-12-28 03:14:17 [INFO] slowapi: Storage has been reset and all limits cleared
-2025-12-28 03:14:17 [INFO] master.api.v1.endpoints.auth: [LOGIN] Login attempt for: unverified@example.com
-2025-12-28 03:14:18 [WARNING] master.api.v1.endpoints.auth: [LOGIN] Unverified user attempted login: unverified@example.com
-2025-12-28 03:14:18 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 403 Forbidden"
-2025-12-28 03:14:18 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/verify-email "HTTP/1.1 401 Unauthorized"
-2025-12-28 03:14:18 [INFO] master.api.v1.endpoints.auth: [VERIFY] Email verified for: unverified@example.com
-2025-12-28 03:14:18 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/verify-email "HTTP/1.1 200 OK"
-[ActivityLog] Error logging action: (sqlite3.OperationalError) no such table: activity_logs
-[SQL: INSERT INTO activity_logs (user_id, user_email, action, target_type, target_id, target_name, details, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
-[parameters: (1, 'unverified@example.com', 'LOGIN_FAILED', None, None, None, '{"reason": "email_not_verified"}', 'unknown', 'testclient', '2025-12-28 01:14:18.355179')]
-(Background on this error at: https://sqlalche.me/e/20/e3q8)
-[ActivityLog] Error logging action: (sqlite3.OperationalError) no such table: activity_logs
-[SQL: INSERT INTO activity_logs (user_id, user_email, action, target_type, target_id, target_name, details, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
-[parameters: (1, 'unverified@example.com', 'PROFILE_UPDATE', None, None, None, '{"action": "email_verified"}', 'unknown', 'testclient', '2025-12-28 01:14:18.394117')]
-(Background on this error at: https://sqlalche.me/e/20/e3q8)
-.2025-12-28 03:14:18 [INFO] slowapi: Storage has been reset and all limits cleared
-2025-12-28 03:14:18 [INFO] slowapi: Storage has been reset and all limits cleared
-.2025-12-28 03:14:18 [INFO] slowapi: Storage has been reset and all limits cleared
-2025-12-28 03:14:18 [INFO] slowapi: Storage has been reset and all limits cleared
-2025-12-28 03:14:19 [INFO] master.api.v1.endpoints.auth: [LOGIN] Login attempt for: mfa_user@example.com
-2025-12-28 03:14:19 [INFO] master.api.v1.endpoints.auth: [LOGIN] Token created successfully for: mfa_user@example.com (role: UserRole.SITE_ADMIN)
-2025-12-28 03:14:19 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
-2025-12-28 03:14:19 [INFO] master.api.v1.endpoints.auth: [MFA] Enabled for user mfa_user@example.com
-2025-12-28 03:14:19 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/mfa/enable "HTTP/1.1 200 OK"
-2025-12-28 03:14:19 [INFO] master.api.v1.endpoints.auth: [LOGIN] Login attempt for: mfa_user@example.com
-2025-12-28 03:14:20 [ERROR] master.api.v1.endpoints.auth: [MFA] Failed to send OTP: name 'CommunicationManager' is not defined
-2025-12-28 03:14:20 [INFO] httpx: HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 500 Internal Server Error"
-[ActivityLog] Error logging action: (sqlite3.OperationalError) no such table: activity_logs
-[SQL: INSERT INTO activity_logs (user_id, user_email, action, target_type, target_id, target_name, details, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
-[parameters: (1, 'mfa_user@example.com', 'LOGIN', None, None, None, '{"role": "UserRole.SITE_ADMIN"}', 'unknown', 'testclient', '2025-12-28 01:14:19.734519')]
-(Background on this error at: https://sqlalche.me/e/20/e3q8)
-[ActivityLog] Error logging action: (sqlite3.OperationalError) no such table: activity_logs
-[SQL: INSERT INTO activity_logs (user_id, user_email, action, target_type, target_id, target_name, details, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
-[parameters: (1, 'mfa_user@example.com', 'PROFILE_UPDATE', None, None, None, '{"action": "enable_mfa", "channel": "Test Email"}', None, None, '2025-12-28 01:14:19.767908')]
-(Background on this error at: https://sqlalche.me/e/20/e3q8)
-F2025-12-28 03:14:20 [INFO] slowapi: Storage has been reset and all limits cleared
-
+tests/test_rbac.py::test_validate_node_access FAILED                     [ 25%]
+tests/test_rbac.py::test_validate_site_access FAILED                     [ 50%]
+tests/test_rbac.py::test_site_admin_backup_endpoints FAILED              [ 75%]
+tests/test_rbac.py::test_unauthorized_site_access FAILED                 [100%]
 
 =================================== FAILURES ===================================
-________________________________ test_mfa_flow _________________________________
+__________________________ test_validate_node_access ___________________________
 
-client = <starlette.testclient.TestClient object at 0x768a96f17a10>
-db = <sqlalchemy.orm.session.Session object at 0x768a96f17860>
+db = <sqlalchemy.orm.session.Session object at 0x76ec8d63e9f0>
 
-    def test_mfa_flow(client, db):
-        # Setup: Create user and channel
-        user = models.User(
-            email="mfa_user@example.com",
-            hashed_password=get_password_hash("StrongPass123!"),
-            is_active=True,
-            is_verified=True,
-            role=models.UserRole.SITE_ADMIN
-        )
-        db.add(user)
-        db.commit() # Initial commit to get ID
-    
-        channel = models.CommunicationChannel(
-            name="Test Email",
-            channel_type=models.ChannelType.EMAIL,
-            provider="smtp",
-            config_encrypted="dummy",
-            is_default=True
-        )
-        db.add(channel)
-        db.commit()
-    
-        # 1. Login normally (MFA disabled)
-        response = client.post("/api/v1/auth/login", json={
-            "username": "mfa_user@example.com",
-            "password": "StrongPass123!"
-        })
-        assert response.status_code == 200
-        token = response.json()["access_token"]
-    
-        # 2. Enable MFA
-        # Note: enable_mfa expects json body with channel_id.
-        # schemas.MfaEnableRequest is the body.
-        response = client.post(
-            "/api/v1/auth/mfa/enable",
-            json={"channel_id": channel.id},
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        if response.status_code != 200:
-            print(response.json())
-        assert response.status_code == 200
-    
-        # 3. Login with MFA enabled -> Should return 200 (schema match) but with mfa_required=True
-        response = client.post("/api/v1/auth/login", json={
-            "username": "mfa_user@example.com",
-            "password": "StrongPass123!"
-        })
->       assert response.status_code == 200
-E       assert 500 == 200
-E        +  where 500 = <Response [500 Internal Server Error]>.status_code
+    def test_validate_node_access(db):
+        # Setup users
+>       super_admin = create_user(db, "super@test.com", models.UserRole.SUPER_ADMIN)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-tests/test_auth.py:135: AssertionError
+tests/test_rbac.py:51: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_rbac.py:9: in create_user
+    hashed_password=get_password_hash(password),
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+master/core/security.py:14: in get_password_hash
+    return pwd_context.hash(password)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/context.py:2258: in hash
+    return record.hash(secret, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:779: in hash
+    self.checksum = self._calc_checksum(secret)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:591: in _calc_checksum
+    self._stub_requires_backend()
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2254: in _stub_requires_backend
+    cls.set_backend()
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2156: in set_backend
+    return owner.set_backend(name, dryrun=dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2163: in set_backend
+    return cls.set_backend(name, dryrun=dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2188: in set_backend
+    cls._set_backend(name, dryrun)
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2311: in _set_backend
+    super(SubclassBackendMixin, cls)._set_backend(name, dryrun)
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2224: in _set_backend
+    ok = loader(**kwds)
+         ^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:626: in _load_backend_mixin
+    return mixin_cls._finalize_backend_mixin(name, dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:421: in _finalize_backend_mixin
+    if detect_wrap_bug(IDENT_2A):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:380: in detect_wrap_bug
+    if verify(secret, bug_hash):
+       ^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:792: in verify
+    return consteq(self._calc_checksum(secret), chk)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <passlib.handlers.bcrypt._BcryptBackend object at 0x76ec8d63ea50>
+secret = b'01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345...7890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234'
+
+    def _calc_checksum(self, secret):
+        # bcrypt behavior:
+        #   secret must be bytes
+        #   config must be ascii bytes
+        #   returns ascii bytes
+        secret, ident = self._prepare_digest_args(secret)
+        config = self._get_config(ident)
+        if isinstance(config, unicode):
+            config = config.encode("ascii")
+>       hash = _bcrypt.hashpw(secret, config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: password cannot be longer than 72 bytes, truncate manually if necessary (e.g. my_password[:72])
+
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:655: ValueError
+----------------------------- Captured stderr call -----------------------------
+2025-12-28 06:32:33 [WARNING] passlib.handlers.bcrypt: (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/home/garikaib/Documents/source/wordpress-backup/venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+------------------------------ Captured log call -------------------------------
+WARNING  passlib.handlers.bcrypt:bcrypt.py:622 (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/home/garikaib/Documents/source/wordpress-backup/venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+DEBUG    passlib.handlers.bcrypt:bcrypt.py:625 detected 'bcrypt' backend, version '<unknown>'
+DEBUG    passlib.handlers.bcrypt:bcrypt.py:406 'bcrypt' backend lacks $2$ support, enabling workaround
+__________________________ test_validate_site_access ___________________________
+
+db = <sqlalchemy.orm.session.Session object at 0x76ec8d66e300>
+
+    def test_validate_site_access(db):
+        # Setup users
+>       super_admin = create_user(db, "super2@test.com", models.UserRole.SUPER_ADMIN)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_rbac.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_rbac.py:9: in create_user
+    hashed_password=get_password_hash(password),
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+master/core/security.py:14: in get_password_hash
+    return pwd_context.hash(password)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/context.py:2258: in hash
+    return record.hash(secret, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:779: in hash
+    self.checksum = self._calc_checksum(secret)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:591: in _calc_checksum
+    self._stub_requires_backend()
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2254: in _stub_requires_backend
+    cls.set_backend()
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2156: in set_backend
+    return owner.set_backend(name, dryrun=dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2163: in set_backend
+    return cls.set_backend(name, dryrun=dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2188: in set_backend
+    cls._set_backend(name, dryrun)
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2311: in _set_backend
+    super(SubclassBackendMixin, cls)._set_backend(name, dryrun)
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2224: in _set_backend
+    ok = loader(**kwds)
+         ^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:626: in _load_backend_mixin
+    return mixin_cls._finalize_backend_mixin(name, dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:421: in _finalize_backend_mixin
+    if detect_wrap_bug(IDENT_2A):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:380: in detect_wrap_bug
+    if verify(secret, bug_hash):
+       ^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:792: in verify
+    return consteq(self._calc_checksum(secret), chk)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <passlib.handlers.bcrypt._BcryptBackend object at 0x76ec8d66e7e0>
+secret = b'01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345...7890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234'
+
+    def _calc_checksum(self, secret):
+        # bcrypt behavior:
+        #   secret must be bytes
+        #   config must be ascii bytes
+        #   returns ascii bytes
+        secret, ident = self._prepare_digest_args(secret)
+        config = self._get_config(ident)
+        if isinstance(config, unicode):
+            config = config.encode("ascii")
+>       hash = _bcrypt.hashpw(secret, config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: password cannot be longer than 72 bytes, truncate manually if necessary (e.g. my_password[:72])
+
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:655: ValueError
+----------------------------- Captured stderr call -----------------------------
+2025-12-28 06:32:34 [WARNING] passlib.handlers.bcrypt: (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/home/garikaib/Documents/source/wordpress-backup/venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+------------------------------ Captured log call -------------------------------
+WARNING  passlib.handlers.bcrypt:bcrypt.py:622 (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/home/garikaib/Documents/source/wordpress-backup/venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+DEBUG    passlib.handlers.bcrypt:bcrypt.py:625 detected 'bcrypt' backend, version '<unknown>'
+_______________________ test_site_admin_backup_endpoints _______________________
+
+client = <starlette.testclient.TestClient object at 0x76ec8d53bbc0>
+db = <sqlalchemy.orm.session.Session object at 0x76ec8d539c40>
+
+    def test_site_admin_backup_endpoints(client, db):
+        # Create Site Admin and assign site
+>       site_admin_user = create_user(db, "backup_admin@test.com", models.UserRole.SITE_ADMIN)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_rbac.py:112: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_rbac.py:9: in create_user
+    hashed_password=get_password_hash(password),
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+master/core/security.py:14: in get_password_hash
+    return pwd_context.hash(password)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/context.py:2258: in hash
+    return record.hash(secret, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:779: in hash
+    self.checksum = self._calc_checksum(secret)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:591: in _calc_checksum
+    self._stub_requires_backend()
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2254: in _stub_requires_backend
+    cls.set_backend()
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2156: in set_backend
+    return owner.set_backend(name, dryrun=dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2163: in set_backend
+    return cls.set_backend(name, dryrun=dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2188: in set_backend
+    cls._set_backend(name, dryrun)
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2311: in _set_backend
+    super(SubclassBackendMixin, cls)._set_backend(name, dryrun)
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2224: in _set_backend
+    ok = loader(**kwds)
+         ^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:626: in _load_backend_mixin
+    return mixin_cls._finalize_backend_mixin(name, dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:421: in _finalize_backend_mixin
+    if detect_wrap_bug(IDENT_2A):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:380: in detect_wrap_bug
+    if verify(secret, bug_hash):
+       ^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:792: in verify
+    return consteq(self._calc_checksum(secret), chk)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <passlib.handlers.bcrypt._BcryptBackend object at 0x76ec8d53acf0>
+secret = b'01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345...7890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234'
+
+    def _calc_checksum(self, secret):
+        # bcrypt behavior:
+        #   secret must be bytes
+        #   config must be ascii bytes
+        #   returns ascii bytes
+        secret, ident = self._prepare_digest_args(secret)
+        config = self._get_config(ident)
+        if isinstance(config, unicode):
+            config = config.encode("ascii")
+>       hash = _bcrypt.hashpw(secret, config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: password cannot be longer than 72 bytes, truncate manually if necessary (e.g. my_password[:72])
+
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:655: ValueError
+---------------------------- Captured stderr setup -----------------------------
+2025-12-28 06:32:34 [INFO] slowapi: Storage has been reset and all limits cleared
 ------------------------------ Captured log setup ------------------------------
 INFO     slowapi:extension.py:360 Storage has been reset and all limits cleared
+----------------------------- Captured stderr call -----------------------------
+2025-12-28 06:32:34 [WARNING] passlib.handlers.bcrypt: (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/home/garikaib/Documents/source/wordpress-backup/venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
 ------------------------------ Captured log call -------------------------------
-DEBUG    asyncio:selector_events.py:64 Using selector: EpollSelector
-INFO     master.api.v1.endpoints.auth:auth.py:33 [LOGIN] Login attempt for: mfa_user@example.com
-INFO     master.api.v1.endpoints.auth:auth.py:177 [LOGIN] Token created successfully for: mfa_user@example.com (role: UserRole.SITE_ADMIN)
-INFO     httpx:_client.py:1026 HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
-DEBUG    asyncio:selector_events.py:64 Using selector: EpollSelector
-INFO     master.api.v1.endpoints.auth:auth.py:448 [MFA] Enabled for user mfa_user@example.com
-INFO     httpx:_client.py:1026 HTTP Request: POST http://testserver/api/v1/auth/mfa/enable "HTTP/1.1 200 OK"
-DEBUG    asyncio:selector_events.py:64 Using selector: EpollSelector
-INFO     master.api.v1.endpoints.auth:auth.py:33 [LOGIN] Login attempt for: mfa_user@example.com
-ERROR    master.api.v1.endpoints.auth:auth.py:120 [MFA] Failed to send OTP: name 'CommunicationManager' is not defined
-DEBUG    urllib3.connectionpool:connectionpool.py:1049 Starting new HTTPS connection (1): o4510604827230208.ingest.de.sentry.io:443
-INFO     httpx:_client.py:1026 HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 500 Internal Server Error"
+WARNING  passlib.handlers.bcrypt:bcrypt.py:622 (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/home/garikaib/Documents/source/wordpress-backup/venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+DEBUG    passlib.handlers.bcrypt:bcrypt.py:625 detected 'bcrypt' backend, version '<unknown>'
+--------------------------- Captured stderr teardown ---------------------------
+2025-12-28 06:32:34 [INFO] slowapi: Storage has been reset and all limits cleared
+---------------------------- Captured log teardown -----------------------------
+INFO     slowapi:extension.py:360 Storage has been reset and all limits cleared
+________________________ test_unauthorized_site_access _________________________
+
+client = <starlette.testclient.TestClient object at 0x76ec8d5390a0>
+db = <sqlalchemy.orm.session.Session object at 0x76ec8d53a3c0>
+
+    def test_unauthorized_site_access(client, db):
+        # Create Site Admin with NO assignments
+>       site_admin_user = create_user(db, "bad_admin@test.com", models.UserRole.SITE_ADMIN)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_rbac.py:151: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_rbac.py:9: in create_user
+    hashed_password=get_password_hash(password),
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+master/core/security.py:14: in get_password_hash
+    return pwd_context.hash(password)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/context.py:2258: in hash
+    return record.hash(secret, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:779: in hash
+    self.checksum = self._calc_checksum(secret)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:591: in _calc_checksum
+    self._stub_requires_backend()
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2254: in _stub_requires_backend
+    cls.set_backend()
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2156: in set_backend
+    return owner.set_backend(name, dryrun=dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2163: in set_backend
+    return cls.set_backend(name, dryrun=dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2188: in set_backend
+    cls._set_backend(name, dryrun)
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2311: in _set_backend
+    super(SubclassBackendMixin, cls)._set_backend(name, dryrun)
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:2224: in _set_backend
+    ok = loader(**kwds)
+         ^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:626: in _load_backend_mixin
+    return mixin_cls._finalize_backend_mixin(name, dryrun)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:421: in _finalize_backend_mixin
+    if detect_wrap_bug(IDENT_2A):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:380: in detect_wrap_bug
+    if verify(secret, bug_hash):
+       ^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/passlib/utils/handlers.py:792: in verify
+    return consteq(self._calc_checksum(secret), chk)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <passlib.handlers.bcrypt._BcryptBackend object at 0x76ec8d539dc0>
+secret = b'01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345...7890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234'
+
+    def _calc_checksum(self, secret):
+        # bcrypt behavior:
+        #   secret must be bytes
+        #   config must be ascii bytes
+        #   returns ascii bytes
+        secret, ident = self._prepare_digest_args(secret)
+        config = self._get_config(ident)
+        if isinstance(config, unicode):
+            config = config.encode("ascii")
+>       hash = _bcrypt.hashpw(secret, config)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: password cannot be longer than 72 bytes, truncate manually if necessary (e.g. my_password[:72])
+
+venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py:655: ValueError
+---------------------------- Captured stderr setup -----------------------------
+2025-12-28 06:32:34 [INFO] slowapi: Storage has been reset and all limits cleared
+------------------------------ Captured log setup ------------------------------
+INFO     slowapi:extension.py:360 Storage has been reset and all limits cleared
+----------------------------- Captured stderr call -----------------------------
+2025-12-28 06:32:34 [WARNING] passlib.handlers.bcrypt: (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/home/garikaib/Documents/source/wordpress-backup/venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+------------------------------ Captured log call -------------------------------
+WARNING  passlib.handlers.bcrypt:bcrypt.py:622 (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/home/garikaib/Documents/source/wordpress-backup/venv/lib/python3.12/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+DEBUG    passlib.handlers.bcrypt:bcrypt.py:625 detected 'bcrypt' backend, version '<unknown>'
+--------------------------- Captured stderr teardown ---------------------------
+2025-12-28 06:32:35 [INFO] slowapi: Storage has been reset and all limits cleared
 ---------------------------- Captured log teardown -----------------------------
 INFO     slowapi:extension.py:360 Storage has been reset and all limits cleared
 =============================== warnings summary ===============================
-master/venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:272: 13 warnings
-  /home/garikaib/Documents/source/wordpress-backup/master/venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:272: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.6/migration/
-    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+master/core/config.py:4
+  /home/garikaib/Documents/source/wordpress-backup/master/core/config.py:4: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Settings(BaseSettings):
 
-master/venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854
-  /home/garikaib/Documents/source/wordpress-backup/master/venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+master/schemas.py:33
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:33: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class UserResponse(UserBase):
+
+master/schemas.py:89
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:89: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class NodeResponse(NodeBase):
+
+master/schemas.py:129
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:129: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class NodeDetailResponse(NodeBase):
+
+master/schemas.py:145
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:145: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class NodeSimple(BaseModel):
+
+master/schemas.py:152
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:152: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class SiteResponse(SiteBase):
+
+master/schemas.py:169
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:169: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class SiteSimple(BaseModel):
+
+master/schemas.py:177
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:177: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class StorageProviderSimple(BaseModel):
+
+master/schemas.py:184
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:184: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class BackupResponse(BaseModel):
+
+master/schemas.py:208
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:208: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ActivityLogResponse(BaseModel):
+
+master/schemas.py:228
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:228: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class SettingResponse(BaseModel):
+
+master/schemas.py:266
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:266: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class StorageProviderResponse(BaseModel):
+
+master/schemas.py:328
+  /home/garikaib/Documents/source/wordpress-backup/master/schemas.py:328: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CommunicationChannelResponse(BaseModel):
+
+venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854
+  /home/garikaib/Documents/source/wordpress-backup/venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
     from crypt import crypt as _crypt
 
 master/core/logging_config.py:58: 10 warnings
-tests/test_auth.py: 78 warnings
+tests/test_rbac.py: 16 warnings
   /home/garikaib/Documents/source/wordpress-backup/master/core/logging_config.py:58: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
     "timestamp": datetime.utcnow().isoformat() + "Z",
 
-tests/test_auth.py::test_login_rate_limit
-tests/test_auth.py::test_idor_protection_in_verification
-tests/test_auth.py::test_password_policy
-tests/test_auth.py::test_mfa_flow
-  /home/garikaib/Documents/source/wordpress-backup/master/venv/lib/python3.12/site-packages/httpx/_client.py:680: DeprecationWarning: The 'app' shortcut is now deprecated. Use the explicit style 'transport=WSGITransport(app=...)' instead.
-    warnings.warn(message, DeprecationWarning)
-
-tests/test_auth.py::test_login_rate_limit
-tests/test_auth.py::test_login_rate_limit
-tests/test_auth.py::test_login_rate_limit
-tests/test_auth.py::test_login_rate_limit
-tests/test_auth.py::test_login_rate_limit
-tests/test_auth.py::test_idor_protection_in_verification
-tests/test_auth.py::test_idor_protection_in_verification
-tests/test_auth.py::test_mfa_flow
-tests/test_auth.py::test_mfa_flow
-  /home/garikaib/Documents/source/wordpress-backup/master/core/activity_logger.py:104: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
-    created_at=datetime.utcnow(),
-
-tests/test_auth.py::test_idor_protection_in_verification
-tests/test_auth.py::test_mfa_flow
-tests/test_auth.py::test_mfa_flow
-  /home/garikaib/Documents/source/wordpress-backup/master/core/security.py:19: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
-    expire = datetime.utcnow() + expires_delta
-
-tests/test_auth.py::test_idor_protection_in_verification
-tests/test_auth.py::test_mfa_flow
-  /home/garikaib/Documents/source/wordpress-backup/master/venv/lib/python3.12/site-packages/jose/jwt.py:311: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
-    now = timegm(datetime.utcnow().utctimetuple())
-
-tests/test_auth.py::test_mfa_flow
-tests/test_auth.py::test_mfa_flow
-  /home/garikaib/Documents/source/wordpress-backup/master/venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3593: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
-    return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
-
-tests/test_auth.py::test_mfa_flow
-  /home/garikaib/Documents/source/wordpress-backup/master/api/v1/endpoints/auth.py:80: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
-    user.login_otp_expires = datetime.utcnow() + timedelta(minutes=5)
-
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 =========================== short test summary info ============================
-FAILED tests/test_auth.py::test_mfa_flow - assert 500 == 200
-================== 1 failed, 3 passed, 123 warnings in 8.34s ===================
-Sentry is attempting to send 3 pending events
-Waiting up to 2 seconds
-Press Ctrl-C to quit
+FAILED tests/test_rbac.py::test_validate_node_access - ValueError: password c...
+FAILED tests/test_rbac.py::test_validate_site_access - ValueError: password c...
+FAILED tests/test_rbac.py::test_site_admin_backup_endpoints - ValueError: pas...
+FAILED tests/test_rbac.py::test_unauthorized_site_access - ValueError: passwo...
+======================== 4 failed, 40 warnings in 2.06s ========================

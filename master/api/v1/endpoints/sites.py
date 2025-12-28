@@ -23,14 +23,25 @@ def read_sites(
         sites = db.query(models.Site).offset(skip).limit(limit).all()
         total = db.query(models.Site).count()
     elif current_user.role == models.UserRole.NODE_ADMIN:
-        # Node admins see sites on their nodes
-        node_ids = [n.id for n in current_user.nodes]
-        sites = db.query(models.Site).filter(models.Site.node_id.in_(node_ids)).offset(skip).limit(limit).all()
-        total = db.query(models.Site).filter(models.Site.node_id.in_(node_ids)).count()
+        # Node admins see sites on their assigned nodes
+        # Join Site -> Node -> user_nodes
+        query = (
+            db.query(models.Site)
+            .join(models.Node)
+            .join(models.user_nodes, models.Node.id == models.user_nodes.c.node_id)
+            .filter(models.user_nodes.c.user_id == current_user.id)
+        )
+        sites = query.offset(skip).limit(limit).all()
+        total = query.count()
     else:
-        # Site admins see only their sites
-        sites = db.query(models.Site).filter(models.Site.admin_id == current_user.id).offset(skip).limit(limit).all()
-        total = db.query(models.Site).filter(models.Site.admin_id == current_user.id).count()
+        # Site admins see assigned sites
+        query = (
+            db.query(models.Site)
+            .join(models.user_sites)
+            .filter(models.user_sites.c.user_id == current_user.id)
+        )
+        sites = query.offset(skip).limit(limit).all()
+        total = query.count()
     
     # Build response
     site_responses = []
@@ -72,16 +83,18 @@ def read_sites_simple(
         if node_id:
             query = query.filter(models.Site.node_id == node_id)
     elif current_user.role == models.UserRole.NODE_ADMIN:
-        node_ids = [n.id for n in current_user.nodes]
+        # Filter sites on assigned nodes
+        query = query.join(models.Node).join(models.user_nodes, models.Node.id == models.user_nodes.c.node_id).filter(models.user_nodes.c.user_id == current_user.id)
+        
         if node_id:
-            if node_id not in node_ids:
+            # Also verify requested node is assigned
+            if not any(n.id == node_id for n in current_user.assigned_nodes):
                 raise HTTPException(status_code=403, detail="Access denied to this node")
             query = query.filter(models.Site.node_id == node_id)
-        else:
-            query = query.filter(models.Site.node_id.in_(node_ids))
+            
     else:
-        # Site admins see only their sites
-        query = query.filter(models.Site.admin_id == current_user.id)
+        # Site admins see assigned sites
+        query = query.join(models.user_sites).filter(models.user_sites.c.user_id == current_user.id)
     
     sites = query.all()
     return [{"id": s.id, "name": s.name, "node_id": s.node_id} for s in sites]
@@ -101,12 +114,9 @@ def read_site(
         raise HTTPException(status_code=404, detail="Site not found")
     
     # Check access
-    if current_user.role == models.UserRole.SITE_ADMIN:
-        if site.admin_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
-    elif current_user.role == models.UserRole.NODE_ADMIN:
-        if site.node_id not in [n.id for n in current_user.nodes]:
-            raise HTTPException(status_code=403, detail="Access denied")
+    # Check access
+    if not deps.validate_site_access(current_user, site):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     last_backup = None
     if site.backups:
@@ -151,9 +161,9 @@ def update_site_quota(
         raise HTTPException(status_code=404, detail="Site not found")
     
     # Check access
-    if current_user.role == models.UserRole.NODE_ADMIN:
-        if site.node_id not in [n.id for n in current_user.nodes]:
-            raise HTTPException(status_code=403, detail="Access denied")
+    # Check access
+    if not deps.validate_site_access(current_user, site):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     # Get the node
     node = site.node
@@ -211,12 +221,9 @@ def get_site_quota_status(
         raise HTTPException(status_code=404, detail="Site not found")
     
     # Check access
-    if current_user.role == models.UserRole.SITE_ADMIN:
-        if site.admin_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
-    elif current_user.role == models.UserRole.NODE_ADMIN:
-        if site.node_id not in [n.id for n in current_user.nodes]:
-            raise HTTPException(status_code=403, detail="Access denied")
+    # Check access
+    if not deps.validate_site_access(current_user, site):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     site_status = check_quota_status(site)
     node_status = check_node_quota_status(site.node, db) if site.node else None
@@ -271,6 +278,10 @@ def check_pre_backup_quota(
     site = db.query(models.Site).filter(models.Site.id == site_id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+        
+    # Check access
+    if not deps.validate_site_access(current_user, site):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     used_bytes = site.storage_used_bytes or 0
     quota_bytes = (site.storage_quota_gb or 10) * (1024 ** 3)
@@ -312,7 +323,7 @@ def check_pre_backup_quota(
 async def start_site_backup(
     site_id: int,
     db: Session = Depends(deps.get_db),
-    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+    current_user: models.User = Depends(deps.get_current_active_user),
 ):
     """
     Start a real backup for a site.
@@ -323,9 +334,8 @@ async def start_site_backup(
         raise HTTPException(status_code=404, detail="Site not found")
     
     # Check access
-    if current_user.role == models.UserRole.NODE_ADMIN:
-        if site.node_id not in [n.id for n in current_user.nodes]:
-            raise HTTPException(status_code=403, detail="Access denied")
+    if not deps.validate_site_access(current_user, site):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     # Check if already running (check DB, not in-memory)
     if site.backup_status == "running":
@@ -359,12 +369,16 @@ async def start_site_backup(
 async def stop_site_backup(
     site_id: int,
     db: Session = Depends(deps.get_db),
-    current_user: models.User = Depends(deps.get_current_node_admin_or_higher),
+    current_user: models.User = Depends(deps.get_current_active_user),
 ):
     """Stop a running backup for a site."""
     site = db.query(models.Site).filter(models.Site.id == site_id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Check access
+    if not deps.validate_site_access(current_user, site):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     try:
         from daemon.api import stop_backup, BackupStopRequest
@@ -388,6 +402,10 @@ async def get_site_backup_status(
     site = db.query(models.Site).filter(models.Site.id == site_id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Check access
+    if not deps.validate_site_access(current_user, site):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     # Also get live status from daemon
     try:

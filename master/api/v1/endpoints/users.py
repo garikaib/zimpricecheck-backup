@@ -86,11 +86,15 @@ def read_users(
         total = db.query(models.User).count()
     else:
         # Node Admin: Get Site Admins managing sites on their nodes
-        node_ids = [node.id for node in current_user.nodes]
+        # Node Admin: Get Site Admins managing sites on their nodes via assignments
+        my_node_ids = [n.id for n in current_user.assigned_nodes]
+        
+        # User -> user_sites -> Site -> Check if site.node_id in my_node_ids
         users = (
             db.query(models.User)
-            .join(models.Site, models.User.id == models.Site.admin_id)
-            .filter(models.Site.node_id.in_(node_ids))
+            .join(models.user_sites)
+            .join(models.Site, models.user_sites.c.site_id == models.Site.id)
+            .filter(models.Site.node_id.in_(my_node_ids))
             .filter(models.User.role == models.UserRole.SITE_ADMIN)
             .distinct()
             .offset(skip)
@@ -99,8 +103,9 @@ def read_users(
         )
         total = (
             db.query(models.User)
-            .join(models.Site, models.User.id == models.Site.admin_id)
-            .filter(models.Site.node_id.in_(node_ids))
+            .join(models.user_sites)
+            .join(models.Site, models.user_sites.c.site_id == models.Site.id)
+            .filter(models.Site.node_id.in_(my_node_ids))
             .filter(models.User.role == models.UserRole.SITE_ADMIN)
             .distinct()
             .count()
@@ -208,11 +213,14 @@ def read_user(
             raise HTTPException(status_code=403, detail="Cannot view this user")
         
         # Check if user manages a site on one of current_user's nodes
-        node_ids = [node.id for node in current_user.nodes]
+        # Check if user manages a site on one of current_user's nodes
+        my_node_ids = [n.id for n in current_user.assigned_nodes]
+        
         has_access = (
             db.query(models.Site)
-            .filter(models.Site.admin_id == user.id)
-            .filter(models.Site.node_id.in_(node_ids))
+            .join(models.user_sites)
+            .filter(models.user_sites.c.user_id == user.id)
+            .filter(models.Site.node_id.in_(my_node_ids))
             .first()
         )
         if not has_access:
@@ -253,11 +261,14 @@ def update_user(
             raise HTTPException(status_code=403, detail="Cannot change user role")
         
         # Check access to user's sites
-        node_ids = [node.id for node in current_user.nodes]
+        # Check access to user's sites
+        my_node_ids = [n.id for n in current_user.assigned_nodes]
+        
         has_access = (
             db.query(models.Site)
-            .filter(models.Site.admin_id == user.id)
-            .filter(models.Site.node_id.in_(node_ids))
+            .join(models.user_sites)
+            .filter(models.user_sites.c.user_id == user.id)
+            .filter(models.Site.node_id.in_(my_node_ids))
             .first()
         )
         if not has_access:

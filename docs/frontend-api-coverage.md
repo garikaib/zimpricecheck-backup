@@ -162,6 +162,23 @@ interface BackupListResponse {
 
 ---
 
+## Role-Based Access Control (RBAC)
+
+Permissions are enforced based on user role and resource assignments:
+
+| Role | Nodes Access | Sites Access | User Visibility |
+|------|--------------|--------------|-----------------|
+| **Super Admin** | All nodes | All sites | All users |
+| **Node Admin** | Assigned nodes only | Sites on assigned nodes | Site Admins on their nodes |
+| **Site Admin** | None | Assigned sites only | Own profile only |
+
+### Key Changes
+- **Site Admins** can now `Start`, `Stop`, and view `Status` of backups for their assigned sites.
+- **Node Admins** see only nodes explicitly assigned via `POST /users/{id}/nodes`.
+- Endpoint responses are automatically filtered based on user's assignments.
+
+---
+
 ## Error Responses
 
 ```typescript

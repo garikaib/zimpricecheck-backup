@@ -166,8 +166,15 @@ def read_nodes(
     if current_user.role == models.UserRole.SUPER_ADMIN:
         nodes = db.query(models.Node).offset(skip).limit(limit).all()
     else:
-        # Node admins see their own nodes
-        nodes = db.query(models.Node).filter(models.Node.admin_id == current_user.id).offset(skip).limit(limit).all()
+        # Node admins see assigned nodes (RBAC)
+        nodes = (
+            db.query(models.Node)
+            .join(models.user_nodes)
+            .filter(models.user_nodes.c.user_id == current_user.id)
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
     return nodes
 
 
@@ -182,7 +189,13 @@ def read_nodes_simple(
     if current_user.role == models.UserRole.SUPER_ADMIN:
         nodes = db.query(models.Node).all()
     else:
-        nodes = db.query(models.Node).filter(models.Node.admin_id == current_user.id).all()
+        # Query via association table
+        nodes = (
+            db.query(models.Node)
+            .join(models.user_nodes)
+            .filter(models.user_nodes.c.user_id == current_user.id)
+            .all()
+        )
     return nodes
 
 
@@ -238,9 +251,8 @@ def read_node(
         raise HTTPException(status_code=404, detail="Node not found")
     
     # Check access for non-super admins
-    if current_user.role != models.UserRole.SUPER_ADMIN:
-        if node.admin_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+    if not deps.validate_node_access(current_user, node.id):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     # Calculate stats
     sites_count = len(node.sites)
@@ -316,9 +328,8 @@ def get_node_quota_status(
         raise HTTPException(status_code=404, detail="Node not found")
     
     # Access check
-    if current_user.role != models.UserRole.SUPER_ADMIN:
-        if node.admin_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+    if not deps.validate_node_access(current_user, node.id):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     node_status = check_node_quota_status(node, db)
     
@@ -376,9 +387,8 @@ def read_node_sites(
         raise HTTPException(status_code=404, detail="Node not found")
     
     # Check access for non-super admins
-    if current_user.role != models.UserRole.SUPER_ADMIN:
-        if node.admin_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+    if not deps.validate_node_access(current_user, node.id):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     sites = db.query(models.Site).filter(models.Site.node_id == node_id).offset(skip).limit(limit).all()
     total = db.query(models.Site).filter(models.Site.node_id == node_id).count()
@@ -421,9 +431,8 @@ def read_node_backups(
         raise HTTPException(status_code=404, detail="Node not found")
     
     # Check access
-    if current_user.role != models.UserRole.SUPER_ADMIN:
-        if node.admin_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+    if not deps.validate_node_access(current_user, node.id):
+        raise HTTPException(status_code=403, detail="Access denied")
     
     # Get site IDs for this node
     site_ids = [s.id for s in node.sites]
