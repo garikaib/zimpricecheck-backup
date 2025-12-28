@@ -38,6 +38,28 @@ class UserResponse(UserBase):
     assigned_sites: List[int] = []
     class Config:
         from_attributes = True
+    
+    @field_validator('assigned_nodes', mode='before')
+    @classmethod
+    def convert_nodes_to_ids(cls, v):
+        if v is None:
+            return []
+        # If it's already a list of ints, return as-is
+        if v and isinstance(v[0], int):
+            return v
+        # Convert ORM objects to IDs
+        return [node.id for node in v] if v else []
+    
+    @field_validator('assigned_sites', mode='before')
+    @classmethod
+    def convert_sites_to_ids(cls, v):
+        if v is None:
+            return []
+        # If it's already a list of ints, return as-is
+        if v and isinstance(v[0], int):
+            return v
+        # Convert ORM objects to IDs
+        return [site.id for site in v] if v else []
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
