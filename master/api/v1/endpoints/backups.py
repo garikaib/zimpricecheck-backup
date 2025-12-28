@@ -282,9 +282,19 @@ def get_backup_download_url(
         from master.core.reconciliation import get_s3_client
         s3_client = get_s3_client(backup.provider)
         
+        # Parse Key from s3_path (stored as s3://bucket/key)
+        key = backup.s3_path
+        if key.startswith(f"s3://{backup.provider.bucket}/"):
+            key = key[len(f"s3://{backup.provider.bucket}/"):]
+        elif key.startswith("s3://"):
+            # Fallback: try to strip s3:// and first segment
+            parts = key[5:].split("/", 1)
+            if len(parts) == 2:
+                key = parts[1]
+        
         url = s3_client.generate_presigned_url(
             'get_object',
-            Params={'Bucket': backup.provider.bucket, 'Key': backup.s3_path},
+            Params={'Bucket': backup.provider.bucket, 'Key': key},
             ExpiresIn=3600  # 1 hour
         )
         

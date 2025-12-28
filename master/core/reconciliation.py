@@ -272,10 +272,17 @@ def delete_s3_object(
     try:
         s3_client = get_s3_client(provider)
         
-        # Parse bucket and key from s3_path
-        # s3_path format: node_uuid/site_uuid/filename
-        s3_client.delete_object(Bucket=provider.bucket, Key=s3_path)
-        logger.info(f"Deleted S3 object: {provider.bucket}/{s3_path}")
+        # Parse Key from s3_path (stored as s3://bucket/key)
+        key = s3_path
+        if key.startswith(f"s3://{provider.bucket}/"):
+            key = key[len(f"s3://{provider.bucket}/"):]
+        elif key.startswith("s3://"):
+            parts = key[5:].split("/", 1)
+            if len(parts) == 2:
+                key = parts[1]
+                
+        s3_client.delete_object(Bucket=provider.bucket, Key=key)
+        logger.info(f"Deleted S3 object: {provider.bucket}/{key}")
         return True
         
     except Exception as e:
