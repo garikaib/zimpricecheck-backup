@@ -82,9 +82,35 @@ def stream_metrics(token):
     except Exception as e:
         print(f"\nStream error: {e}")
 
+def poll_nodes_stats(token):
+    """Background polling for remote node stats via /nodes/ endpoint."""
+    print("Starting background polling for remote node stats...")
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    while True:
+        try:
+            resp = requests.get(f"{API_URL}/nodes/", headers=headers, timeout=5)
+            if resp.status_code == 200:
+                nodes = resp.json()
+                for node in nodes:
+                    stats = node.get("stats", [])
+                    if stats:
+                        latest = stats[0]
+                        print(f"[Polling] Node {node['hostname']} (ID {node['id']}): CPU {latest['cpu_usage']}% | Disk {latest['disk_usage']}% | Active Backups {latest['active_backups']}")
+            time.sleep(5)
+        except Exception as e:
+            print(f"[Polling Error] {e}")
+            time.sleep(5)
+
 if __name__ == "__main__":
     try:
         token = get_token()
+        
+        # Start polling in background thread
+        import threading
+        t = threading.Thread(target=poll_nodes_stats, args=(token,), daemon=True)
+        t.start()
+        
         stream_metrics(token)
     except KeyboardInterrupt:
         pass

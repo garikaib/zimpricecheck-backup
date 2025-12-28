@@ -29,6 +29,20 @@ timeout 5 curl -N -s "$API_URL/metrics/node/stream?token=$TOKEN&interval=1"
 echo
 echo "--- End Stream ---"
 
+# 2b. Test Remote Node Stats (Polling)
+echo
+echo "[*] Verifying Remote Node Stats via /nodes/ API..."
+NODES_JSON=$(curl -s -X GET "$API_URL/nodes/" -H "Authorization: Bearer $TOKEN")
+STATS_COUNT=$(echo "$NODES_JSON" | jq '[.[].stats | length] | add')
+
+if [ "$STATS_COUNT" -gt 0 ]; then
+    echo "[+] SUCCESS: Node stats found in /nodes/ response (Total stats entries: $STATS_COUNT)."
+    echo "    Sample stats: $(echo "$NODES_JSON" | jq -c '.[].stats[0] | select(. != null)')"
+else
+    echo "[-] WARNING: No stats found in /nodes/ response. (Is the daemon running?)"
+fi
+
+
 # 3. Test Backup Stream (for a site)
 echo
 echo "[*] Connecting to Backup Stream for Site $SITE_ID (will run for 5 seconds)..."
