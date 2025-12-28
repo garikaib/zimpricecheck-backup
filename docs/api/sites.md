@@ -180,7 +180,12 @@ List all sites with pagination.
       "storage_used_bytes": 3612358215,
       "storage_quota_gb": 15,
       "storage_used_gb": 3.36,
-      "last_backup": "2025-12-27T08:00:00"
+      "last_backup": "2025-12-27T08:00:00",
+      "schedule_frequency": "daily",
+      "schedule_time": "02:00",
+      "schedule_days": null,
+      "retention_copies": 7,
+      "next_run_at": "2025-12-28T02:00:00"
     }
   ],
   "total": 1

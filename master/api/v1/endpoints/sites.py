@@ -63,6 +63,12 @@ def read_sites(
             "storage_quota_gb": site.storage_quota_gb or 10,
             "storage_used_gb": round((site.storage_used_bytes or 0) / (1024**3), 2),
             "last_backup": last_backup,
+            # Schedule fields
+            "schedule_frequency": site.schedule_frequency or "manual",
+            "schedule_time": site.schedule_time,
+            "schedule_days": site.schedule_days,
+            "retention_copies": site.retention_copies or 5,
+            "next_run_at": site.next_run_at,
         })
     
     return {"sites": site_responses, "total": total}
@@ -138,6 +144,12 @@ def read_site(
         "backup_status": site.backup_status,
         "backup_progress": site.backup_progress,
         "backup_message": site.backup_message,
+        # Schedule fields
+        "schedule_frequency": site.schedule_frequency or "manual",
+        "schedule_time": site.schedule_time,
+        "schedule_days": site.schedule_days,
+        "retention_copies": site.retention_copies or 5,
+        "next_run_at": site.next_run_at,
     }
 
 
