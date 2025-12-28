@@ -100,10 +100,14 @@ async def login_access_token(
                 # Get provider and send directly
                 provider = comm_manager.get_provider(channel)
                 if provider:
+                    from master.core.communications.templates import render_mfa_email
+                    subject, html, body = render_mfa_email(otp, user.full_name)
+                    
                     await provider.send(
                         to=user.email,
-                        subject="Your Login Verification Code",
-                        body=f"Your verification code is: {otp}. It expires in 5 minutes.",
+                        subject=subject,
+                        body=body,
+                        html=html,
                         template_data={"otp": otp}
                     )
                 else:
@@ -466,10 +470,15 @@ async def enable_mfa(
         comm_manager = ChannelManager(db)
         provider = comm_manager.get_provider(channel)
         if provider:
+            from master.core.communications.templates import render_mfa_email
+            # For setup confirmation
+            subject_, html, body = render_mfa_email(otp, current_user.full_name)
+            
             await provider.send(
                 to=current_user.email,
                 subject="Confirm MFA Setup",
-                body=f"Your MFA setup code is: {otp}. It expires in 5 minutes.",
+                body=body,
+                html=html,
                 template_data={"otp": otp}
             )
         else:

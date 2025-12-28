@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import button %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block hero_text %}{{ title|upper }}{% endblock %}
+
+{% block content %}
+<p style="font-size: 18px; color: #000; font-weight: bold;">
+    Hi {% if user_name %}{{ user_name }}{% else %}there{% endif %},
+</p>
+
+<p>
+    {{ message }}
+</p>
+
+{% if action_url and action_text %}
+{{ button(action_url, action_text) }}
+{% endif %}
+{% endblock %}

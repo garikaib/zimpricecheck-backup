@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "macros/components.html" import button, alert %}
+
+{% block title %}Verify your email{% endblock %}
+{% block hero_text %}EMAIL VERIFICATION{% endblock %}
+
+{% block content %}
+<p style="font-size: 18px; color: #000; font-weight: bold;">
+    Hi {% if user_name %}{{ user_name }}{% else %}there{% endif %},
+</p>
+
+<p>
+    Your account has been created. To complete your registration and access the dashboard, please verify your email
+    address.
+</p>
+
+{{ button(login_url, "Go to Login") }}
+
+<p>When prompted, enter this verification code:</p>
+
+<div style="background-color: #f3f4f6; border: 2px dashed #000; padding: 20px; text-align: center; margin: 24px 0;">
+    <span style="font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #000;">{{ code
+        }}</span>
+</div>
+
+<p style="font-size: 14px; color: #6b7280;">
+    <strong>How to verify:</strong> Go to the login page and sign in with your email and password.
+    You'll be prompted to enter the verification code above.
+</p>
+
+{{ alert("This code will expire in 24 hours.", "info") }}
+{% endblock %}

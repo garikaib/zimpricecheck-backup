@@ -1,47 +1,97 @@
-# Frontend Implementation Brief: Backup Scheduling
+# Frontend Brief: Schedule Fields Now Available
 
-## Overview
-Users can now schedule automated backups for their sites.
-This feature should be exposed in the **Site Details** modal or page, under a new "Settings" or "Schedule" tab.
+## Summary
+Schedule fields are **now included** in site list and detail API responses. The frontend scheduler modal should pre-populate with saved values.
 
-## API Endpoint
-**Update Schedule**: `PUT /sites/{id}/schedule`
+---
 
-## UI Requirements
+## API Response Changes
 
-### 1. Schedule Configuration Form
-Fields:
-- **Frequency**: Dropdown [`Manual` (default), `Daily`, `Weekly`, `Monthly`]
-- **Time**: Time Picker (HH:MM). Label must state: **"Time (Africa/Harare)"**.
-- **Days**:
-  - If `Daily`: Hidden.
-  - If `Weekly`: Multi-select checkboxes [Mon, Tue, Wed, Thu, Fri, Sat, Sun]. Send as CSV (0=Mon, 6=Sun).
-  - If `Monthly`: Number input (1-31). Send as CSV (e.g. "1" or "1,15").
-- **Retention**: Number Input. Label: "Retention Copies". Default `5`. Max `10`.
+### GET /sites/ (List)
+Each site object in the response now includes:
 
-### 2. Data Handling
-Payload Example:
 ```json
 {
-  "schedule_frequency": "weekly",
-  "schedule_time": "23:00",
-  "schedule_days": "0,2,4", // Mon, Wed, Fri
-  "retention_copies": 7
+  "id": 1,
+  "name": "example.com",
+  "wp_path": "/var/www/example/htdocs",
+  "schedule_frequency": "daily",
+  "schedule_time": "02:00",
+  "schedule_days": "0,2,4",
+  "retention_copies": 7,
+  "next_run_at": "2025-12-29T00:00:00"
 }
 ```
 
-### 3. State Management
-- When opening the form, populate with existing values from `site` object fields:
-  - `site.schedule_frequency`
-  - `site.schedule_time`
-  - `site.schedule_days`
-  - `site.retention_copies`
-- If `frequency` is "manual", hide Time/Days fields.
+### GET /sites/{id} (Detail)
+Same fields available on individual site response.
 
-### 4. Display Info
-- Show `site.next_run_at` in the UI (e.g., "Next Backup: Dec 28, 23:00 (Harare)").
-- Status Badges: Show "Scheduled" vs "Manual".
+---
 
-## Validation Rules
-- **Time**: Must be valid HH:MM.
-- **Retention**: Must be positive integer (1-10 recommended).
+## Frontend Integration
+
+### When Opening Scheduler Modal
+
+```typescript
+// Pre-populate form with existing values
+const site = await fetchSite(siteId);
+
+form.frequency = site.schedule_frequency || 'manual';
+form.time = site.schedule_time || '02:00';
+form.days = site.schedule_days?.split(',') || [];
+form.retention = site.retention_copies || 5;
+```
+
+### TypeScript Interface Update
+
+```typescript
+interface Site {
+  id: number;
+  name: string;
+  // ... existing fields
+  
+  // Schedule fields
+  schedule_frequency: 'manual' | 'daily' | 'weekly' | 'monthly';
+  schedule_time: string | null;
+  schedule_days: string | null;  // CSV: "0,2,4"
+  retention_copies: number;
+  next_run_at: string | null;    // ISO datetime
+}
+```
+
+---
+
+## UI Display
+
+| Field | Display |
+|-------|---------|
+| `schedule_frequency` | Badge: "Manual" / "Daily" / "Weekly" / "Monthly" |
+| `schedule_time` | "Scheduled at 02:00 (Harare)" |
+| `next_run_at` | "Next backup: Dec 29, 2025 00:00" |
+| `retention_copies` | "Keeping 7 copies" |
+
+---
+
+## Save Endpoint (unchanged)
+
+```
+PUT /sites/{id}/schedule
+```
+
+```json
+{
+  "schedule_frequency": "weekly",
+  "schedule_time": "03:00",
+  "schedule_days": "1,3,5",
+  "retention_copies": 5
+}
+```
+
+---
+
+## Checklist
+
+- [ ] Update `Site` TypeScript interface with new fields
+- [ ] Pre-populate scheduler modal form from site data
+- [ ] Display schedule info in site list/cards
+- [ ] Show "Next backup" when `next_run_at` is set
