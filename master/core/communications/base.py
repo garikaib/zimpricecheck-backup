@@ -108,6 +108,19 @@ class CommunicationProvider(ABC):
                     errors.append(f"Config {key} must be an integer")
         
         return len(errors) == 0, errors
+    
+    @staticmethod
+    def validate_email_address(email: str) -> bool:
+        """Validate email address format."""
+        try:
+            from email_validator import validate_email, EmailNotValidError
+            validate_email(email, check_deliverability=False)
+            return True
+        except ImportError:
+            # Fallback if library missing
+            return "@" in email
+        except Exception:
+            return False
 
 
 # Registry of available providers

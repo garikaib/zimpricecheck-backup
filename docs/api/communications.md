@@ -94,6 +94,8 @@ Create a new communication channel. The `config` object is strictly validated ag
 
 **Errors**:
 - `400 Bad Request`: Invalid provider or configuration validation failure (e.g. missing fields, wrong types).
+    - **Note**: `from_email` is strictly validated for format.
+    - **SendPulse**: The `from_email` MUST be a verified sender in your SendPulse account.
 
 ## Update Channel
 

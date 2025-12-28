@@ -7,7 +7,7 @@ import smtplib
 import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
 import logging
 
 from master.core.communications.base import (
@@ -48,6 +48,18 @@ class SMTPProvider(CommunicationProvider):
             "from_email": {"type": "string", "required": True},
             "from_name": {"type": "string", "required": False},
         }
+    
+    @classmethod
+    def validate_config(cls, config: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        is_valid, errors = super().validate_config(config)
+        
+        # Additional validation
+        if "from_email" in config:
+            if not cls.validate_email_address(config["from_email"]):
+                errors.append("Invalid 'from_email' format")
+                is_valid = False
+                
+        return is_valid, errors
     
     async def send(
         self,

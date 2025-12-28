@@ -81,7 +81,25 @@ def test_create_channel_validation(client, db, setup_admin):
     assert response.status_code == 400
     assert "Missing required config" in response.json()["detail"]
 
-    # 3. Invalid Config Type
+    assert "missing required config" in response.json()["detail"].lower()
+
+    # 3. Invalid Email Format
+    response = client.post("/api/v1/communications/channels", headers=headers, json={
+        "name": "Bad Email SMTP",
+        "channel_type": "email",
+        "provider": "smtp",
+        "config": {
+            "host": "smtp.gmail.com",
+            "port": 587,
+            "username": "user",
+            "password": "pass",
+            "from_email": "not-an-email"
+        }
+    })
+    assert response.status_code == 400
+    assert "invalid 'from_email' format" in response.json()["detail"].lower()
+
+    # 4. Invalid Config Type
     response = client.post("/api/v1/communications/channels", headers=headers, json={
         "name": "Bad Types SMTP",
         "channel_type": "email",

@@ -5,7 +5,7 @@ Sends emails via SendPulse REST API (recommended for transactional emails).
 Uses pysendpulse library: pip install pysendpulse
 """
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
 
 from master.core.communications.base import (
     CommunicationProvider,
@@ -40,6 +40,25 @@ class SendPulseAPIProvider(CommunicationProvider):
             "from_name": {"type": "string", "required": False},
         }
     
+
+    @classmethod
+    def validate_config(cls, config: Dict[str, Any]) -> Tuple[bool, List[str]]:
+        """Validate config, ensuring from_email is a valid email."""
+        from typing import List, Tuple # make sure type hints are available if not imported generally
+        
+        is_valid, errors = super().validate_config(config)
+        
+        # Additional validation
+        if "from_email" in config:
+            if not cls.validate_email_address(config["from_email"]):
+                errors.append("Invalid 'from_email' format")
+                is_valid = False
+            
+            # Note: We could check if it is verified, but that requires calling the API
+            # which is slow and requires active credentials (which we are just setting).
+                
+        return is_valid, errors
+
     def _get_client(self):
         """Get SendPulse API client."""
         try:
