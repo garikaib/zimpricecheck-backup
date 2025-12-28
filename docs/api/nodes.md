@@ -100,6 +100,30 @@ curl -X PUT "https://api.example.com/api/v1/nodes/1/quota" \
 
 ---
 
+## GET /nodes/
+List all nodes.
+
+### Response
+```json
+[
+  {
+    "id": 1,
+    "hostname": "wp.zimpricecheck.com",
+    "status": "active",
+    "storage_quota_gb": 100,
+    "stats": [
+        {
+            "cpu_usage": 15,
+            "disk_usage": 45,
+            "active_backups": 0
+        }
+    ]
+  }
+]
+```
+
+---
+
 ## GET /nodes/{id}
 
 Get node details with stats.
@@ -116,7 +140,14 @@ Get node details with stats.
   "total_available_gb": 500,
   "storage_used_gb": 12.5,
   "sites_count": 3,
-  "backups_count": 15
+  "backups_count": 15,
+  "stats": [
+    {
+      "cpu_usage": 12,
+      "disk_usage": 42,
+      "active_backups": 1
+    }
+  ]
 }
 ```
 

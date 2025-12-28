@@ -36,6 +36,18 @@ def report_stats(
         timestamp=datetime.utcnow()
     )
     db.add(stats)
+    
+    # Cleanup old stats (Keep last 5 minutes roughly, or last 10 records)
+    # This prevents the table from growing indefinitely since we only need real-time data.
+    # subquery to find IDs to keep?
+    # Simple approach: Delete < (now - 10 minutes)
+    from datetime import timedelta
+    cutoff = datetime.utcnow() - timedelta(minutes=10)
+    db.query(models.NodeStats).filter(
+        models.NodeStats.node_id == node.id,
+        models.NodeStats.timestamp < cutoff
+    ).delete()
+    
     db.commit()
     
     return {"status": "recorded", "node": node.hostname}

@@ -89,6 +89,16 @@ class TokenData(BaseModel):
     email: Optional[str] = None
     role: Optional[str] = None
 
+# -- Stats Schemas --
+class NodeStatsBase(BaseModel):
+    cpu_usage: int
+    disk_usage: int
+    active_backups: int
+    # logs: List[str] = [] # Potential future expansion
+
+class NodeStatsCreate(NodeStatsBase):
+    node_api_key: str # Simple auth for now
+
 # -- Node Schemas --
 class NodeBase(BaseModel):
     hostname: str
@@ -116,6 +126,7 @@ class NodeResponse(NodeBase):
     storage_used_bytes: int = 0
     max_retention_copies: int = 10
     max_concurrent_backups: int = 2
+    stats: Optional[List[NodeStatsBase]] = []
     class Config:
         from_attributes = True
 
@@ -139,16 +150,6 @@ class SiteVerifyRequest(BaseModel):
     path: str
     wp_config_path: Optional[str] = None
 
-# -- Stats Schemas --
-class NodeStatsBase(BaseModel):
-    cpu_usage: int
-    disk_usage: int
-    active_backups: int
-    # logs: List[str] = [] # Potential future expansion
-
-class NodeStatsCreate(NodeStatsBase):
-    node_api_key: str # Simple auth for now
-
 # -- Extended Node Schemas --
 class NodeDetailResponse(NodeBase):
     id: int
@@ -162,6 +163,7 @@ class NodeDetailResponse(NodeBase):
     backups_count: int = 0
     max_retention_copies: int = 10
     max_concurrent_backups: int = 2
+    stats: Optional[List[NodeStatsBase]] = []
     class Config:
         from_attributes = True
 

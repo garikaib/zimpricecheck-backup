@@ -121,6 +121,50 @@ class BackupDaemon:
         # Run server
         await server.serve()
     
+    async def _report_stats_loop(self):
+        """Periodically report system stats to master."""
+        import httpx
+        try:
+            from daemon.node_metrics import get_system_metrics
+        except ImportError:
+            logger.error("Failed to import node_metrics. Stats reporting disabled.")
+            return
+
+        logger.info("Starting stats reporting loop")
+        while self.running and not self._shutdown_event.is_set():
+            try:
+                metrics = get_system_metrics()
+                
+                # Calculate active backups (local queue)
+                queue = get_job_queue()
+                active_count = len(queue.list_jobs(status=JobStatus.RUNNING))
+                
+                # Disk usage: use highest usage partition
+                disk_percent = 0
+                if metrics.get("disks"):
+                    disk_percent = max([d.get("percent_used", 0) for d in metrics["disks"]])
+                
+                stats_payload = {
+                    "cpu_usage": int(metrics["cpu"]["usage_percent"]),
+                    "disk_usage": int(disk_percent),
+                    "active_backups": active_count
+                }
+                
+                headers = {"X-API-KEY": self.config.node_api_key}
+                # Ensure URL has correct path
+                base_url = self.config.master_url.rstrip("/")
+                url = f"{base_url}/stats/"
+                
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(url, json=stats_payload, headers=headers, timeout=10.0)
+                    if resp.status_code != 200:
+                        logger.warning(f"Stats report failed: {resp.status_code} - {resp.text}")
+                
+            except Exception as e:
+                logger.error(f"Failed to report stats: {e}")
+            
+            await asyncio.sleep(60) # Report every minute
+
     async def _run_node(self):
         """
         Run in node mode.
@@ -134,6 +178,9 @@ class BackupDaemon:
         if not self.config.node_api_key:
             logger.error("No API key configured. Generate one on the master server.")
             return
+        
+        # Start stats reporting in background
+        asyncio.create_task(self._report_stats_loop())
         
         while self.running and not self._shutdown_event.is_set():
             try:
