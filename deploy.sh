@@ -314,17 +314,34 @@ if [ -f ".env" ]; then
     export $(grep -v '^#' .env | sed 's/"//g' | xargs)
 fi
 
-# Deployment Settings (Defaults)
-REMOTE_HOST="${REMOTE_HOST:-wp.zimpricecheck.com}"
-REMOTE_USER="${REMOTE_USER:-ubuntu}"
-REMOTE_PORT="${REMOTE_PORT:-22}"
-
-# Different defaults based on mode
-if [ "$MODE" == "master" ]; then
-    REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup-master}"
-else
+# If REMOTE_HOST not set (CLI mode without interactive menu), prompt for it
+if [ -z "$REMOTE_HOST" ]; then
+    echo ""
+    echo "=== Deployment Target ==="
+    if [ "$MODE" == "master" ]; then
+        read -p "Master host [wp.zimpricecheck.com]: " REMOTE_HOST
+        REMOTE_HOST="${REMOTE_HOST:-wp.zimpricecheck.com}"
+        read -p "SSH Port [2200]: " REMOTE_PORT
+        REMOTE_PORT="${REMOTE_PORT:-2200}"
+    else
+        read -p "Node host (e.g., api.zimpricecheck.com): " REMOTE_HOST
+        if [ -z "$REMOTE_HOST" ]; then
+            echo "Error: Node host is required"
+            exit 1
+        fi
+        read -p "SSH Port [22]: " REMOTE_PORT
+        REMOTE_PORT="${REMOTE_PORT:-22}"
+    fi
+    read -p "SSH User [ubuntu]: " REMOTE_USER
+    REMOTE_USER="${REMOTE_USER:-ubuntu}"
+    read -p "Remote Dir [/opt/wordpress-backup]: " REMOTE_DIR
     REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
 fi
+
+# Apply remaining defaults only if still unset
+REMOTE_USER="${REMOTE_USER:-ubuntu}"
+REMOTE_PORT="${REMOTE_PORT:-22}"
+REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
 
 SSH_TARGET="${REMOTE_USER}@${REMOTE_HOST}"
 
