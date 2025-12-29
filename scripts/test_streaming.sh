@@ -20,23 +20,22 @@ if [ -z "$TOKEN" ] || [ "$TOKEN" == "null" ]; then
 fi
 echo "[+] Login successful!"
 
-# 2. Test Master Node Metrics Stream (Local SSE)
+# 2. Test Unified Node Stats Stream (ALL nodes in one stream)
 echo
-echo "[*] Connecting to MASTER Node Metrics Stream (Local SSE) (will run for 5 seconds)..."
-echo "    URL: $API_URL/metrics/node/stream?token=...&interval=1"
-echo "    NOTE: This stream only shows metrics for the Master server itself."
+echo "[*] Connecting to UNIFIED Node Stats Stream (will run for 5 seconds)..."
+echo "    URL: $API_URL/metrics/nodes/stats/stream?token=...&interval=2"
+echo "    NOTE: This stream shows stats for ALL nodes (Master + Remote) in one unified format."
 echo "--- Stream Output ---"
-timeout 5 curl -N -s "$API_URL/metrics/node/stream?token=$TOKEN&interval=1"
+timeout 5 curl -N -s "$API_URL/metrics/nodes/stats/stream?token=$TOKEN&interval=2"
 echo
 echo "--- End Stream ---"
 
-# 2b. Test Cluster Node Stats (Polling /nodes/)
+# 2b. Quick REST check for /nodes/ API (backward compat)
 echo
-echo "[*] Verifying Cluster Node Stats via /nodes/ API..."
+echo "[*] Verifying /nodes/ REST API (backward compat)..."
 NODES_JSON=$(curl -s -X GET "$API_URL/nodes/" -H "Authorization: Bearer $TOKEN")
+echo "$NODES_JSON" | jq -r '.[] | "-> Node: \(.hostname) (ID \(.id)) | Status: \(.status)"'
 
-# Print stats for ALL nodes found
-echo "$NODES_JSON" | jq -r '.[] | "-> Node: \(.hostname) (ID \(.id))\n   Stats: \((if (.stats | length > 0) then (.stats[0] | tostring) else "None (Check Master SSE for local stats)" end))\n"'
 
 
 # 3. Test Backup Stream (for a site)
