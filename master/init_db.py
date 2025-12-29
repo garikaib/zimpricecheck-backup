@@ -1,12 +1,14 @@
+import os
+import secrets
+import socket
+import json
+import logging
+
 from master.core.config import get_settings
 from master.db.session import SessionLocal, engine
 from master.db import models
 from master.core.security import get_password_hash
 from master.core.encryption import encrypt_credential
-import secrets
-import socket
-import json
-import logging
 from sqlalchemy import inspect, text
 
 # Configure logging
@@ -100,16 +102,18 @@ def init_db():
     
     db = SessionLocal()
     
-    # 2. Setup Superuser requested by user (garikaib@gmail.com)
-    target_email = "garikaib@gmail.com"
+    # 2. Setup Superuser (from env or default)
+    target_email = os.environ.get("INIT_ADMIN_EMAIL", "garikaib@gmail.com")
     user = db.query(models.User).filter(models.User.email == target_email).first()
     
     if not user:
-        # Generate secure random password
-        random_password = secrets.token_urlsafe(12)
+        # Use password from env (deploy --new) or generate random
+        random_password = os.environ.get("INIT_ADMIN_PASSWORD") or secrets.token_urlsafe(12)
         print(f"\n{'='*50}")
         print(f"[*] Creating SUPERUSER: {target_email}")
-        print(f"[*] PASSWORD: {random_password}")
+        if not os.environ.get("INIT_ADMIN_PASSWORD"):
+            print(f"[*] PASSWORD: {random_password}")
+            print("   (Save this password - it won't be shown again!)")
         print(f"{'='*50}\n")
         
         user = models.User(
@@ -155,54 +159,16 @@ def init_db():
         db.query(models.Node).update({"storage_quota_gb": 0})
         db.commit()
     
-    # 4. Seed Communication Channels (Pulse API + SMTP)
+    # 4. Communication Channels
+    # NOTE: Channels are NOT seeded automatically anymore.
+    # Use ./admin.sh to configure email channels after deployment.
     email_channel = db.query(models.CommunicationChannel).filter(
         models.CommunicationChannel.channel_type == models.ChannelType.EMAIL
     ).first()
     
     if not email_channel:
-        logger.info("[*] Seeding default email channels...")
-        
-        # Pulse API
-        pulse_config = {
-            "client_id": "76cf1854fb85c6f412098f52c4cdbd2e",
-            "client_secret": "5911e725763f45b67477e45c41abce0b",
-            "from_email": "business@zimpricecheck.com",
-            "from_name": "WordPress Backup",
-        }
-        pulse = models.CommunicationChannel(
-            name="SendPulse API",
-            channel_type=models.ChannelType.EMAIL,
-            provider="sendpulse_api",
-            config_encrypted=encrypt_credential(json.dumps(pulse_config)),
-            allowed_roles=json.dumps(["verification", "notification", "alert", "login_link"]),
-            is_default=True,
-            priority=1,
-        )
-        db.add(pulse)
-        
-        # SMTP Fallback
-        smtp_config = {
-            "host": "smtp-pulse.com",
-            "port": 587, 
-            "username": "garikaib@gmail.com", 
-            "password": "Zten4ifS4CWn",
-            "from_email": "business@zimpricecheck.com",
-            "from_name": "WordPress Backup",
-            "use_tls": True
-        }
-        smtp = models.CommunicationChannel(
-            name="SendPulse SMTP",
-            channel_type=models.ChannelType.EMAIL,
-            provider="smtp",
-            config_encrypted=encrypt_credential(json.dumps(smtp_config)),
-            allowed_roles=json.dumps(["verification", "notification", "alert", "login_link"]),
-            is_default=False,
-            priority=10,
-        )
-        db.add(smtp)
-        db.commit()
-        logger.info("[*] Email channels created.")
+        logger.info("[*] No email channels configured.")
+        logger.info("    Use ./admin.sh or the dashboard to add email providers.")
 
     # 5. Ensure System Settings
     default_settings = {

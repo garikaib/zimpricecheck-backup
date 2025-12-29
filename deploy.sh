@@ -1,15 +1,87 @@
 #!/bin/bash
 # Deployment Script (SaaS Ready)
-# Usage: ./deploy.sh [node|master]
+# Usage: ./deploy.sh [node|master] [--new] [--auto-approve]
 
 set -e
 
 MODE="${1:-node}"
 ARG2="$2"
+ARG3="$3"
+
+# Parse flags
+IS_NEW=false
+AUTO_APPROVE=false
+for arg in "$@"; do
+    case $arg in
+        --new) IS_NEW=true ;;
+        --auto-approve) AUTO_APPROVE=true ;;
+    esac
+done
 
 if [[ "$MODE" != "node" && "$MODE" != "master" ]]; then
-    echo "Usage: ./deploy.sh [node|master] [--test|--web]"
+    echo "Usage: ./deploy.sh [node|master] [--new] [--auto-approve]"
+    echo ""
+    echo "Flags:"
+    echo "  --new          Fresh deployment with interactive config"
+    echo "  --auto-approve Auto-approve node registration (node only)"
     exit 1
+fi
+
+# Fresh deployment prompts
+prompt_master_config() {
+    echo ""
+    echo "=== Fresh Master Deployment ==="
+    echo ""
+    
+    read -p "Admin email [garikaib@gmail.com]: " ADMIN_EMAIL
+    ADMIN_EMAIL="${ADMIN_EMAIL:-garikaib@gmail.com}"
+    
+    # Generate random password
+    ADMIN_PASSWORD=$(openssl rand -base64 12)
+    
+    echo ""
+    echo "Generated admin credentials:"
+    echo "  Email: $ADMIN_EMAIL"
+    echo "  Password: $ADMIN_PASSWORD"
+    echo ""
+    echo "Save these credentials securely!"
+    echo ""
+    read -p "Press Enter to continue..."
+    
+    # Export for init_db.py
+    export INIT_ADMIN_EMAIL="$ADMIN_EMAIL"
+    export INIT_ADMIN_PASSWORD="$ADMIN_PASSWORD"
+}
+
+prompt_node_config() {
+    echo ""
+    echo "=== Fresh Node Deployment ==="
+    echo ""
+    
+    read -p "Master API URL [https://wp.zimpricecheck.com:8081]: " MASTER_URL
+    MASTER_URL="${MASTER_URL:-https://wp.zimpricecheck.com:8081}"
+    
+    read -p "Node hostname [$(hostname)]: " NODE_HOSTNAME
+    NODE_HOSTNAME="${NODE_HOSTNAME:-$(hostname)}"
+    
+    echo ""
+    echo "Node will connect to: $MASTER_URL"
+    echo "Node hostname: $NODE_HOSTNAME"
+    echo ""
+    read -p "Press Enter to continue..."
+    
+    # Export for daemon config
+    export BACKUPD_MASTER_URL="$MASTER_URL"
+    export BACKUPD_HOSTNAME="$NODE_HOSTNAME"
+}
+
+# Run prompts if --new flag
+if [ "$IS_NEW" = true ]; then
+    if [ "$MODE" == "master" ]; then
+        prompt_master_config
+    else
+        prompt_node_config
+    fi
 fi
 
 # Load configuration from .env
@@ -34,6 +106,9 @@ SSH_TARGET="${REMOTE_USER}@${REMOTE_HOST}"
 echo "============================================="
 echo "  Deploying [$MODE] to ${SSH_TARGET}:${REMOTE_PORT}"
 echo "  Remote Dir: ${REMOTE_DIR}"
+if [ "$IS_NEW" = true ]; then
+    echo "  Mode: FRESH DEPLOYMENT"
+fi
 echo "============================================="
 
 # Ensure ZSTD logic
