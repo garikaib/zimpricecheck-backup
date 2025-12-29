@@ -20,27 +20,23 @@ if [ -z "$TOKEN" ] || [ "$TOKEN" == "null" ]; then
 fi
 echo "[+] Login successful!"
 
-# 2. Test Node Metrics Stream
+# 2. Test Master Node Metrics Stream (Local SSE)
 echo
-echo "[*] Connecting to Node Metrics Stream (will run for 5 seconds)..."
+echo "[*] Connecting to MASTER Node Metrics Stream (Local SSE) (will run for 5 seconds)..."
 echo "    URL: $API_URL/metrics/node/stream?token=...&interval=1"
+echo "    NOTE: This stream only shows metrics for the Master server itself."
 echo "--- Stream Output ---"
 timeout 5 curl -N -s "$API_URL/metrics/node/stream?token=$TOKEN&interval=1"
 echo
 echo "--- End Stream ---"
 
-# 2b. Test Remote Node Stats (Polling)
+# 2b. Test Cluster Node Stats (Polling /nodes/)
 echo
-echo "[*] Verifying Remote Node Stats via /nodes/ API..."
+echo "[*] Verifying Cluster Node Stats via /nodes/ API..."
 NODES_JSON=$(curl -s -X GET "$API_URL/nodes/" -H "Authorization: Bearer $TOKEN")
-STATS_COUNT=$(echo "$NODES_JSON" | jq '[.[].stats | length] | add')
 
-if [ "$STATS_COUNT" -gt 0 ]; then
-    echo "[+] SUCCESS: Node stats found in /nodes/ response (Total stats entries: $STATS_COUNT)."
-    echo "    Sample stats: $(echo "$NODES_JSON" | jq -c '.[].stats[0] | select(. != null)')"
-else
-    echo "[-] WARNING: No stats found in /nodes/ response. (Is the daemon running?)"
-fi
+# Print stats for ALL nodes found
+echo "$NODES_JSON" | jq -r '.[] | "-> Node: \(.hostname) (ID \(.id))\n   Stats: \((if (.stats | length > 0) then (.stats[0] | tostring) else "None (Check Master SSE for local stats)" end))\n"'
 
 
 # 3. Test Backup Stream (for a site)

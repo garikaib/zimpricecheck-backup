@@ -92,11 +92,18 @@ def poll_nodes_stats(token):
             resp = requests.get(f"{API_URL}/nodes/", headers=headers, timeout=5)
             if resp.status_code == 200:
                 nodes = resp.json()
+                # Print header once or just print each time? 
+                # Printing every 5s is fine if concise.
+                output = []
                 for node in nodes:
                     stats = node.get("stats", [])
                     if stats:
                         latest = stats[0]
-                        print(f"[Polling] Node {node['hostname']} (ID {node['id']}): CPU {latest['cpu_usage']}% | Disk {latest['disk_usage']}% | Active Backups {latest['active_backups']}")
+                        output.append(f"Node {node['hostname']} (ID {node['id']}): CPU {latest['cpu_usage']}% | Disk {latest['disk_usage']}%")
+                    else:
+                        output.append(f"Node {node['hostname']} (ID {node['id']}): No Stats (Check Master SSE)")
+                
+                print(f"[Polling] {' | '.join(output)}")
             time.sleep(5)
         except Exception as e:
             print(f"[Polling Error] {e}")
