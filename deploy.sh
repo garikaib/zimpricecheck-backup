@@ -479,17 +479,63 @@ if [ -f "daemon/requirements.txt" ]; then
 fi
 
 echo "[*] Creating work directories..."
-sudo mkdir -p "$INSTALL_DIR/backups" /var/tmp/wp-backup-work
+sudo mkdir -p "$INSTALL_DIR/backups" /var/tmp/wp-backup-work /etc/backupd
 sudo rm -f /var/tmp/wp-backup.pid /var/tmp/wp-backup.status
 
+# Create basic config file for daemon
+echo "[*] Creating daemon config..."
+cat > /etc/backupd/config << CONF
+mode=node
+master_url=${BACKUPD_MASTER_URL:-https://wp.zimpricecheck.com:8081}
+CONF
+
 echo "[*] Triggering D1 Sync..."
-sudo -u "$REMOTE_USER" ./venv/bin/python3 lib/d1_manager.py 2>/dev/null || echo "    D1 Sync skipped (not configured)."
+"$INSTALL_DIR/venv/bin/python3" "$INSTALL_DIR/lib/d1_manager.py" 2>/dev/null || echo "    D1 Sync skipped (not configured)."
+
+echo "[*] Creating Systemd Service..."
+cat > /etc/systemd/system/wordpress-backup.service << SERVICE
+[Unit]
+Description=WordPress Backup Daemon (Node)
+After=network.target
+
+[Service]
+Type=simple
+User=$REMOTE_USER
+WorkingDirectory=$INSTALL_DIR
+Environment=BACKUPD_MODE=node
+Environment=BACKUPD_MASTER_URL=${BACKUPD_MASTER_URL:-https://wp.zimpricecheck.com:8081}
+ExecStart=$INSTALL_DIR/venv/bin/python3 -m daemon.main
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
 
 echo "[*] Fixing permissions..."
-sudo chown -R "$REMOTE_USER":"$REMOTE_USER" /var/tmp/wp-backup-work "$INSTALL_DIR"
+sudo chown -R "$REMOTE_USER":"$REMOTE_USER" /var/tmp/wp-backup-work "$INSTALL_DIR" /etc/backupd
 
+echo "[*] Starting daemon..."
+sudo systemctl daemon-reload
+sudo systemctl enable wordpress-backup
+sudo systemctl restart wordpress-backup
+
+# Wait a moment for daemon to start and register
+sleep 3
+
+echo "[*] Checking daemon status..."
+if systemctl is-active --quiet wordpress-backup; then
+    echo "[+] Daemon is running!"
+    echo ""
+    echo "    Check logs with: journalctl -u wordpress-backup -f"
+    echo "    Look for the REGISTRATION CODE in the logs"
+else
+    echo "[!] Daemon failed to start. Check logs:"
+    journalctl -u wordpress-backup -n 20 --no-pager
+fi
+
+echo ""
 echo "[+] Node setup complete!"
-echo "    Next: Configure systemd service and start daemon"
 REMOTE_SCRIPT
 }
 
