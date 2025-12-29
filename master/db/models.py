@@ -96,7 +96,7 @@ class Node(Base):
     api_key = Column(String, unique=True, index=True)  # For agent authentication
     is_active = Column(Boolean, default=True)
     status = Column(Enum(NodeStatus), default=NodeStatus.PENDING)
-    storage_quota_gb = Column(Integer, default=100)
+    storage_quota_gb = Column(Integer, default=0)  # Start at 0 - tied to remote storage
     storage_used_bytes = Column(Integer, default=0)  # Track actual usage
     total_available_gb = Column(Integer, default=1000)
     

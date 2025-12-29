@@ -141,10 +141,18 @@ def init_db():
             ip_address="127.0.0.1",
             api_key=secrets.token_urlsafe(32),
             status=models.NodeStatus.ACTIVE,
-            storage_quota_gb=1000,
+            storage_quota_gb=0,  # Start at 0 - allocations tied to remote storage
             admin_id=user.id,
         )
         db.add(master_node)
+        db.commit()
+    
+    # 3b. Reset any inflated quotas (cleanup from old defaults)
+    # Quotas should be 0 until remote storage is configured and allocations are made
+    inflated_count = db.query(models.Node).filter(models.Node.storage_quota_gb > 0).count()
+    if inflated_count > 0:
+        logger.info(f"[cleanup] Resetting {inflated_count} nodes with inflated quotas to 0...")
+        db.query(models.Node).update({"storage_quota_gb": 0})
         db.commit()
     
     # 4. Seed Communication Channels (Pulse API + SMTP)
