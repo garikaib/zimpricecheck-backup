@@ -353,8 +353,9 @@ if [ "$IS_NEW" = true ]; then
     fi
 fi
 
-# Load configuration from .env
-if [ -f ".env" ]; then
+# Load configuration from .env ONLY if not using --new flag
+# (--new prompts set everything explicitly)
+if [ "$IS_NEW" != true ] && [ -f ".env" ]; then
     export $(grep -v '^#' .env | sed 's/"//g' | xargs)
 fi
 
