@@ -428,16 +428,21 @@ REMOTE_USER="$2"
 
 echo "[*] Checking prerequisites..."
 
-# Detect Python version
-PYTHON_VERSION=$(python3 --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
-echo "    Python version: $PYTHON_VERSION"
+echo "[*] Checking prerequisites..."
 
-# Check for required packages
-MISSING_PKGS=""
-# Check for ensurepip specifically (often missing in bare python3)
-if ! python3 -c "import ensurepip" 2>/dev/null; then
-    MISSING_PKGS="$MISSING_PKGS python${PYTHON_VERSION}-venv"
+# Enforce Python 3.12 (Standard, tested version)
+TARGET_PYTHON="python3.12"
+if ! command -v $TARGET_PYTHON &>/dev/null; then
+    echo "    $TARGET_PYTHON not found. Will attempt to install..."
+    MISSING_PKGS="$MISSING_PKGS $TARGET_PYTHON ${TARGET_PYTHON}-venv ${TARGET_PYTHON}-dev"
+else
+    echo "    Found $TARGET_PYTHON"
+    # Check for venv module specifically for 3.12
+    if ! $TARGET_PYTHON -c "import ensurepip" 2>/dev/null; then
+        MISSING_PKGS="$MISSING_PKGS ${TARGET_PYTHON}-venv"
+    fi
 fi
+
 if ! command -v zstd &>/dev/null; then
     MISSING_PKGS="$MISSING_PKGS zstd"
 fi
@@ -449,6 +454,12 @@ fi
 if [ -n "$MISSING_PKGS" ]; then
     echo "[*] Installing missing packages:$MISSING_PKGS"
     sudo apt-get update -qq
+    # Add deadsnakes PPA if on Ubuntu and 3.12 not found (failsafe)
+    if ! apt-cache show $TARGET_PYTHON &>/dev/null; then
+        sudo apt-get install -y software-properties-common
+        sudo add-apt-repository -y ppa:deadsnakes/ppa
+        sudo apt-get update -qq
+    fi
     sudo apt-get install -y $MISSING_PKGS
 fi
 
@@ -456,19 +467,22 @@ echo "[*] Extracting NODE bundle..."
 cd "$INSTALL_DIR"
 zstd -d -c bundle.tar.zst | tar -xf -
 
-echo "[*] Setting up Python venv..."
-# Recreate venv if pip is missing (broken install)
-if [ -d "venv" ] && [ ! -f "venv/bin/pip" ]; then
-    echo "    Found broken venv (missing pip). Recreating..."
-    rm -rf venv
+echo "[*] Setting up Python venv ($TARGET_PYTHON)..."
+# Recreate venv if it's not the correct version or broken
+if [ -d "venv" ]; then
+    VENV_VER=$(./venv/bin/python3 --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
+    if [ "$VENV_VER" != "3.12" ] || [ ! -f "venv/bin/pip" ]; then
+        echo "    Found incompatible/broken venv ($VENV_VER). Recreating for 3.12..."
+        rm -rf venv
+    fi
 fi
 
 if [ ! -d "venv" ]; then 
-    python3 -m venv venv
+    $TARGET_PYTHON -m venv venv
     # Check if creation succeeded
     if [ ! -f "venv/bin/pip" ]; then
         echo "Error: Failed to create venv with pip. Trying without pip then installing manually..."
-        python3 -m venv venv --without-pip
+        $TARGET_PYTHON -m venv venv --without-pip
         curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
         ./venv/bin/python3 get-pip.py
         rm get-pip.py
