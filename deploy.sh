@@ -258,6 +258,19 @@ prompt_master_config() {
     echo "=== Fresh Master Deployment ==="
     echo ""
     
+    # SSH Target (where to deploy)
+    echo "--- SSH Target (where to deploy code) ---"
+    read -p "Master host [wp.zimpricecheck.com]: " REMOTE_HOST
+    REMOTE_HOST="${REMOTE_HOST:-wp.zimpricecheck.com}"
+    read -p "SSH User [ubuntu]: " REMOTE_USER
+    REMOTE_USER="${REMOTE_USER:-ubuntu}"
+    read -p "SSH Port [2200]: " REMOTE_PORT
+    REMOTE_PORT="${REMOTE_PORT:-2200}"
+    read -p "Remote Dir [/opt/wordpress-backup]: " REMOTE_DIR
+    REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
+    
+    echo ""
+    echo "--- Admin Configuration ---"
     read -p "Admin email [garikaib@gmail.com]: " ADMIN_EMAIL
     ADMIN_EMAIL="${ADMIN_EMAIL:-garikaib@gmail.com}"
     
@@ -265,17 +278,24 @@ prompt_master_config() {
     ADMIN_PASSWORD=$(openssl rand -base64 12)
     
     echo ""
-    echo "Generated admin credentials:"
-    echo "  Email: $ADMIN_EMAIL"
-    echo "  Password: $ADMIN_PASSWORD"
+    echo "=== Summary ==="
+    echo "  Deploy to: $REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT"
+    echo "  Remote Dir: $REMOTE_DIR"
+    echo "  Admin email: $ADMIN_EMAIL"
+    echo "  Admin password: $ADMIN_PASSWORD"
     echo ""
-    echo "Save these credentials securely!"
+    echo "  ⚠️  Save this password - it won't be shown again!"
     echo ""
-    read -p "Press Enter to continue..."
+    read -p "Proceed? [Y/n]: " CONFIRM
+    if [ "$CONFIRM" = "n" ] || [ "$CONFIRM" = "N" ]; then
+        exit 0
+    fi
     
     # Export for init_db.py
     export INIT_ADMIN_EMAIL="$ADMIN_EMAIL"
     export INIT_ADMIN_PASSWORD="$ADMIN_PASSWORD"
+    # Mark that we have SSH target set
+    export REMOTE_HOST REMOTE_USER REMOTE_PORT REMOTE_DIR
 }
 
 prompt_node_config() {
@@ -283,21 +303,45 @@ prompt_node_config() {
     echo "=== Fresh Node Deployment ==="
     echo ""
     
+    # SSH Target (where to deploy)
+    echo "--- SSH Target (where to deploy code) ---"
+    read -p "Node host (e.g., api.zimpricecheck.com): " REMOTE_HOST
+    if [ -z "$REMOTE_HOST" ]; then
+        echo "Error: Node host is required"
+        exit 1
+    fi
+    read -p "SSH User [ubuntu]: " REMOTE_USER
+    REMOTE_USER="${REMOTE_USER:-ubuntu}"
+    read -p "SSH Port [22]: " REMOTE_PORT
+    REMOTE_PORT="${REMOTE_PORT:-22}"
+    read -p "Remote Dir [/opt/wordpress-backup]: " REMOTE_DIR
+    REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
+    
+    echo ""
+    echo "--- Daemon Configuration ---"
     read -p "Master API URL [https://wp.zimpricecheck.com:8081]: " MASTER_URL
     MASTER_URL="${MASTER_URL:-https://wp.zimpricecheck.com:8081}"
     
-    read -p "Node hostname [$(hostname)]: " NODE_HOSTNAME
-    NODE_HOSTNAME="${NODE_HOSTNAME:-$(hostname)}"
+    read -p "Node hostname [$REMOTE_HOST]: " NODE_HOSTNAME
+    NODE_HOSTNAME="${NODE_HOSTNAME:-$REMOTE_HOST}"
     
     echo ""
-    echo "Node will connect to: $MASTER_URL"
-    echo "Node hostname: $NODE_HOSTNAME"
+    echo "=== Summary ==="
+    echo "  Deploy to: $REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT"
+    echo "  Remote Dir: $REMOTE_DIR"
+    echo "  Master URL: $MASTER_URL"
+    echo "  Node hostname: $NODE_HOSTNAME"
     echo ""
-    read -p "Press Enter to continue..."
+    read -p "Proceed? [Y/n]: " CONFIRM
+    if [ "$CONFIRM" = "n" ] || [ "$CONFIRM" = "N" ]; then
+        exit 0
+    fi
     
     # Export for daemon config
     export BACKUPD_MASTER_URL="$MASTER_URL"
     export BACKUPD_HOSTNAME="$NODE_HOSTNAME"
+    # Mark that we have SSH target set
+    export REMOTE_HOST REMOTE_USER REMOTE_PORT REMOTE_DIR
 }
 
 # Run prompts if --new flag
