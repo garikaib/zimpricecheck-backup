@@ -126,9 +126,13 @@ add_new_master() {
     REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
     
     # Save to targets file
+    # Save to targets file
     python3 -c "
-import json
-with open('$TARGETS_FILE','r') as f: d=json.load(f)
+import json, os
+try:
+    with open('$TARGETS_FILE','r') as f: d=json.load(f)
+except:
+    d={}
 d.setdefault('masters',[]).append({'name':'$TARGET_NAME','host':'$REMOTE_HOST','user':'$REMOTE_USER','port':'$REMOTE_PORT','dir':'$REMOTE_DIR'})
 with open('$TARGETS_FILE','w') as f: json.dump(d,f,indent=2)
 "
@@ -196,8 +200,11 @@ add_new_node() {
     REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
     
     python3 -c "
-import json
-with open('$TARGETS_FILE','r') as f: d=json.load(f)
+import json, os
+try:
+    with open('$TARGETS_FILE','r') as f: d=json.load(f)
+except:
+    d={}
 d.setdefault('nodes',[]).append({'name':'$TARGET_NAME','host':'$REMOTE_HOST','user':'$REMOTE_USER','port':'$REMOTE_PORT','dir':'$REMOTE_DIR'})
 with open('$TARGETS_FILE','w') as f: json.dump(d,f,indent=2)
 "
@@ -393,9 +400,9 @@ if [ "$IS_NEW" = true ]; then
 fi
 
 # Load configuration from .env ONLY if not using --new flag
-# (--new prompts set everything explicitly)
+# IMPORTANT: Filter out REMOTE_* deployment variables to prevent accidental overwrites
 if [ "$IS_NEW" != true ] && [ -f ".env" ]; then
-    export $(grep -v '^#' .env | sed 's/"//g' | xargs)
+    export $(grep -v '^#' .env | grep -vE '^(REMOTE_|SSH_|HOST|USER|PORT)' | sed 's/"//g' | xargs)
 fi
 
 # If REMOTE_HOST not set (CLI mode without interactive menu), prompt for it
