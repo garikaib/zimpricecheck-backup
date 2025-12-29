@@ -426,26 +426,57 @@ set -e
 INSTALL_DIR="$1"
 REMOTE_USER="$2"
 
+echo "[*] Checking prerequisites..."
+
+# Detect Python version
+PYTHON_VERSION=$(python3 --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
+echo "    Python version: $PYTHON_VERSION"
+
+# Check for required packages
+MISSING_PKGS=""
+if ! python3 -c "import venv" 2>/dev/null; then
+    MISSING_PKGS="$MISSING_PKGS python${PYTHON_VERSION}-venv"
+fi
+if ! command -v zstd &>/dev/null; then
+    MISSING_PKGS="$MISSING_PKGS zstd"
+fi
+if ! command -v pip3 &>/dev/null; then
+    MISSING_PKGS="$MISSING_PKGS python3-pip"
+fi
+
+# Install missing packages
+if [ -n "$MISSING_PKGS" ]; then
+    echo "[*] Installing missing packages:$MISSING_PKGS"
+    sudo apt-get update -qq
+    sudo apt-get install -y $MISSING_PKGS
+fi
+
 echo "[*] Extracting NODE bundle..."
 cd "$INSTALL_DIR"
 zstd -d -c bundle.tar.zst | tar -xf -
 
 echo "[*] Setting up Python venv..."
-if [ ! -d "venv" ]; then python3 -m venv venv; fi
+if [ ! -d "venv" ]; then 
+    python3 -m venv venv
+fi
 ./venv/bin/pip install --upgrade pip -q
 ./venv/bin/pip install -r requirements.txt -q
+if [ -f "daemon/requirements.txt" ]; then
+    ./venv/bin/pip install -r daemon/requirements.txt -q
+fi
 
-echo "[*] Node mode: Ready for daemon startup"
-echo "[*] Configure via master API and run: python -m daemon.main --mode node"
-
+echo "[*] Creating work directories..."
 sudo mkdir -p "$INSTALL_DIR/backups" /var/tmp/wp-backup-work
 sudo rm -f /var/tmp/wp-backup.pid /var/tmp/wp-backup.status
 
 echo "[*] Triggering D1 Sync..."
-sudo -u "$REMOTE_USER" ./venv/bin/python3 lib/d1_manager.py || echo "[!] D1 Sync skipped."
+sudo -u "$REMOTE_USER" ./venv/bin/python3 lib/d1_manager.py 2>/dev/null || echo "    D1 Sync skipped (not configured)."
 
 echo "[*] Fixing permissions..."
 sudo chown -R "$REMOTE_USER":"$REMOTE_USER" /var/tmp/wp-backup-work "$INSTALL_DIR"
+
+echo "[+] Node setup complete!"
+echo "    Next: Configure systemd service and start daemon"
 REMOTE_SCRIPT
 }
 
