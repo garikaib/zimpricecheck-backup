@@ -2,82 +2,162 @@
 
 The `deploy.sh` script supports two distinct deployment targets: **Master** and **Node**.
 
+## Quick Start
+
+```bash
+# Interactive menu (recommended for first-time setup)
+./deploy.sh
+
+# Direct deployment with flags
+./deploy.sh master              # Deploy to saved master target
+./deploy.sh master --new        # Fresh master deployment with prompts  
+./deploy.sh node                # Deploy to saved node target
+./deploy.sh node --new          # Fresh node deployment with prompts
+```
+
 ## Prerequisites
 
-*   **Local Machine**: Linux/Mac with `ssh`, `scp`, `python3`.
-*   **Remote Server**: Ubuntu 20.04/22.04 LTS (recommended).
-*   **SSH Access**: You must have SSH access to the target server (e.g., `ssh user@ip`).
+- **Local Machine**: Linux/Mac with `ssh`, `scp`, `python3`, `zstd`
+- **Remote Server**: Ubuntu 20.04/22.04 LTS (recommended)
+- **SSH Access**: Must have SSH access to the target server
+
+---
+
+## Interactive Menu
+
+When run without arguments, `./deploy.sh` shows an interactive menu:
+
+```
+╔═══════════════════════════════════════════════════╗
+║       WordPress Backup Deployment Tool            ║
+╚═══════════════════════════════════════════════════╝
+
+1. Deploy Master
+2. Deploy Node
+3. View Saved Targets
+0. Exit
+```
+
+**Features:**
+- **Saved Targets**: Deployment targets are saved in `.deploy_targets.json`
+- **Confirm/Edit Workflow**: Shows current config, asks [Y/n/e(dit)]
+- **Fresh Deployments**: New targets automatically prompt for config
+
+---
 
 ## 1. Deploying the Master Server
 
 The Master Server hosts the API, Database (SQLite), and Scheduler.
 
-1.  **Prepare Deployment**:
-    Ensure your local `.env` file or environment variables are set if needed, though `deploy.sh` prompts for target IP.
+### Fresh Deployment
+```bash
+./deploy.sh master --new
+```
 
-2.  **Run Deployment**:
-    ```bash
-    ./deploy.sh master
-    ```
-    *   **Prompts**: You will be asked for the Target IP and SSH User.
-    *   **Actions**:
-        *   Uploads Master code (`master/`) and Daemon (`daemon/`).
-        *   Installs dependencies (`master/requirements.txt`).
-        *   **Initializes Database**:
-            *   Runs `init_db.py` which performs a **Schema Integrity Check**.
-            *   Automatically adds any missing tables/columns to match code.
-            *   Creates default Superuser (`garikaib@gmail.com`) with a **random password** (printed in output) if not exists.
-            *   Creates Master Node record.
-            *   Seeds default email channels (Pulse/SMTP).
-        *   Sets up `systemd` service: `wordpress-master.service`.
+Prompts for:
+- Admin email (default: garikaib@gmail.com)
+- Generates random admin password (displayed once)
 
-3.  **Verify**:
-    ```bash
-    curl https://<master-domain>/api/v1/storage/health
-    # {"healthy": true, ...}
-    ```
+### Update Deployment
+```bash
+./deploy.sh master
+```
+
+Updates code without reinitializing credentials.
+
+### What Happens
+1. Uploads Master code (`master/`) and Daemon (`daemon/`)
+2. Installs dependencies (`master/requirements.txt`)
+3. Runs `init_db.py`:
+   - Schema Integrity Check (auto-adds missing columns)
+   - Creates Superuser (random password if new)
+   - Creates Master Node record (quota: 0)
+   - **Note**: Email channels are NOT auto-seeded. Use `./admin.sh` to configure.
+4. Sets up `systemd` service: `wordpress-master.service`
+
+### Verify
+```bash
+curl https://<master-domain>/api/v1/storage/health
+```
+
+---
 
 ## 2. Deploying a Backup Node
 
 Nodes are the servers running WordPress that perform the actual backups.
 
-1.  **Run Deployment**:
-    ```bash
-    ./deploy.sh node
-    ```
-    *   **Prompts**: You will be asked for the Target IP, SSH User, Master URL, and API Key.
-    *   **Actions**:
-        *   Uploads Daemon code (`daemon/`).
-        *   **Optimized Code**: Automatically refactors `main.py` to remove Master dependencies.
-        *   Installs dependencies (`daemon/requirements.txt`).
-        *   Configures `systemd` service: `wordpress-backup.service`.
-        *   Registers the node with the Master.
+### Fresh Deployment
+```bash
+./deploy.sh node --new
+```
 
-2.  **Activation**:
-    *   The node enters a **PENDING** state upon registration.
-    *   Admin must log in to the Master Dashboard (or use API) to **Approve** the node.
-    *   Once approved, the node will begin polling for jobs.
+Prompts for:
+- Master API URL (e.g., `https://wp.zimpricecheck.com:8081`)
+- Node hostname
 
-3.  **Verify**:
-    Check the service status on the node:
-    ```bash
-    ssh user@node-ip "systemctl status wordpress-backup"
-    ```
+### Update Deployment
+```bash
+./deploy.sh node
+```
 
-## 3. Database Management
+### What Happens
+1. Uploads Daemon code (`daemon/`)
+2. Installs dependencies (`daemon/requirements.txt`)
+3. Configures `systemd` service: `wordpress-backup.service`
+4. Node registers with Master in **PENDING** state
+
+### Activation
+Admin must approve the node via:
+- Dashboard: Nodes → Approve
+- CLI: `./admin.sh` → Node Management → Approve
+
+---
+
+## 3. Admin CLI
+
+The `admin.sh` script provides direct database access (bypasses FastAPI):
+
+```bash
+./admin.sh                      # Interactive menu
+./admin.sh reset-password user@example.com
+./admin.sh disable-mfa user@example.com
+./admin.sh list-users
+./admin.sh status
+```
+
+### Menu Options
+1. **User Management**: Reset password, disable MFA, create admin
+2. **Storage Management**: Add S3 provider, set limits
+3. **Node Management**: Approve, block, set quotas
+4. **System**: Status, reset quotas, danger zone
+
+---
+
+## 4. Storage Quotas
+
+**Important**: Storage quotas start at **0** by default.
+
+- No allocations until remote storage is configured
+- Use `./admin.sh` → Storage Management → Add S3 provider
+- Then allocate quotas to nodes via `./admin.sh` or dashboard
+
+---
+
+## 5. Database Management
 
 The Master Server uses a robust self-healing database strategy.
 
-*   **Integrity Check**: On every deployment (`init_db.py`), the system checks the live SQLite database against the SQLAlchemy models.
-*   **Auto-Migration**: Missing tables and columns are automatically detected and added. giving you a "permanent fix" for schema drift.
-*   **Permissions**: `deploy.sh` enforces correct file ownership `chown user:user` on the database file to prevent `readonly database` errors.
+- **Integrity Check**: On every deployment, `init_db.py` validates schema
+- **Auto-Migration**: Missing tables/columns are automatically added
+- **Permissions**: `deploy.sh` enforces correct file ownership
+
+---
 
 ## Troubleshooting
 
-*   **"OperationalError: no such column"**: This means the DB is out of sync. Re-run deployment or execute `python3 master/init_db.py` on the server to trigger the integrity check.
-*   **"readonly database"**: Use `deploy.sh` to redeploy, which reapplies permission fixes.
-*   **Service Failures**:
-    ```bash
-    journalctl -u wordpress-master -f  # Master
-    journalctl -u wordpress-backup -f  # Node
-    ```
+| Issue | Solution |
+|-------|----------|
+| "no such column" | Re-run deployment to trigger integrity check |
+| "readonly database" | Redeploy with `./deploy.sh master` |
+| Service failures | `journalctl -u wordpress-master -f` |
+| No email sending | Configure channels via `./admin.sh` |
