@@ -473,6 +473,21 @@ set -e
 INSTALL_DIR="$1"
 REMOTE_USER="$2"
 
+echo "[*] Extracting NODE bundle..."
+cd "$INSTALL_DIR"
+if ! command -v zstd &>/dev/null; then
+    echo "[!] zstd not found on remote. Attempting to install..."
+    sudo apt-get update -qq && sudo apt-get install -y zstd
+fi
+zstd -d -c bundle.tar.zst | tar -xf -
+
+echo "[*] Clearing Python cache..."
+find . -name '*.pyc' -delete 2>/dev/null || true
+find . -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+
+echo "[*] Setting up Node venv..."
+if [ ! -d "venv" ]; then python3 -m venv venv; fi
+
 echo "[*] Checking prerequisites..."
 
 echo "[*] Checking prerequisites..."
