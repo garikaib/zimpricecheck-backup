@@ -445,6 +445,7 @@ fi
 
 deploy_node() {
     echo "[*] Creating NODE bundle..."
+    rm -f bundle.tar.zst
     
     # Bundle Agent Files
     tar --exclude='./venv' \

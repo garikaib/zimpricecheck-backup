@@ -245,8 +245,14 @@ class BackupDaemon:
                 print("=" * 50 + "\n")
                 logger.info(f"Registration code: {code} - Waiting for admin approval...")
                 
-                # Step 3: Poll for approval
+                # Step 3: Poll for approval (max 2 hours)
+                start_time = __import__('time').time()
                 while self.running and not self._shutdown_event.is_set():
+                    # Check timeout (2 hours = 7200 seconds)
+                    if __import__('time').time() - start_time > 7200:
+                        logger.error("Registration timed out after 2 hours. Exiting.")
+                        return None
+                        
                     await asyncio.sleep(10)  # Poll every 10 seconds
                     
                     try:
@@ -265,7 +271,7 @@ class BackupDaemon:
                                 logger.info("Node approved by admin!")
                                 return status_data.get("api_key")
                             else:
-                                logger.debug(f"Still pending... status={status_data.get('status')}")
+                                pass # Still pending
                     
                     except Exception as poll_err:
                         logger.warning(f"Poll error: {poll_err}")
