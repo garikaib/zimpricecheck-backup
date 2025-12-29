@@ -14,6 +14,77 @@ Node management and quota status.
 | GET | `/nodes/{id}/backups` | List node backups | Node Admin+ |
 | POST | `/nodes/join-request` | Request join | Public |
 | POST | `/nodes/approve/{id}` | Approve node | Super Admin |
+| **SSE** | `/metrics/nodes/stats/stream` | **Real-time stats for ALL nodes** | Node Admin+ |
+| **SSE** | `/metrics/nodes/{id}/stats/stream` | **Real-time stats for single node** | Node Admin+ |
+
+---
+
+## SSE /metrics/nodes/stats/stream (Unified Stats Stream)
+
+Stream real-time metrics for **ALL nodes** in a single unified format.
+
+### Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `token` | string | required | JWT token for authentication |
+| `interval` | int | 5 | Update interval in seconds (1-60) |
+
+### Usage
+
+```javascript
+const token = 'your-jwt-token';
+const source = new EventSource(`/api/v1/metrics/nodes/stats/stream?token=${token}&interval=5`);
+
+source.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  data.nodes.forEach(node => {
+    console.log(`${node.hostname}: CPU ${node.cpu_percent}%, Disk ${node.disk_percent}%`);
+  });
+};
+```
+
+### Response (SSE Event)
+
+```json
+{
+  "timestamp": "2025-12-29T07:00:00Z",
+  "nodes": [
+    {
+      "id": 2,
+      "hostname": "api.zimpricecheck.com",
+      "status": "online",
+      "is_master": false,
+      "cpu_percent": 12,
+      "memory_percent": null,
+      "disk_percent": 51,
+      "uptime_seconds": null,
+      "active_backups": 0,
+      "last_seen": "2025-12-29T06:59:30Z"
+    },
+    {
+      "id": 3,
+      "hostname": "wp.zimpricecheck.com",
+      "status": "online",
+      "is_master": true,
+      "cpu_percent": 5.0,
+      "memory_percent": 72.8,
+      "disk_percent": 51.5,
+      "uptime_seconds": 447000,
+      "active_backups": 1,
+      "last_seen": null
+    }
+  ]
+}
+```
+
+### Node Status Values
+
+| Status | Description |
+|--------|-------------|
+| `online` | Node is reporting stats actively |
+| `stale` | Node hasn't reported in >5 minutes |
+| `offline` | No stats ever received |
 
 ---
 

@@ -20,8 +20,20 @@ if [ -z "$TOKEN" ] || [ "$TOKEN" == "null" ]; then
 fi
 echo "[+] Login successful!"
 
-# 2. Test Unified Node Stats Stream (ALL nodes in one stream)
+# 2. Test Master-Only SSE Stream (OLD - single node, local only)
 echo
+echo "=== STAGE 1: Master-Only SSE Stream (Legacy) ==="
+echo "[*] Connecting to MASTER Node Metrics Stream (will run for 3 seconds)..."
+echo "    URL: $API_URL/metrics/node/stream?token=...&interval=1"
+echo "    NOTE: This stream ONLY shows the Master server's metrics (local psutil)."
+echo "--- Stream Output ---"
+timeout 3 curl -N -s "$API_URL/metrics/node/stream?token=$TOKEN&interval=1" | head -5
+echo
+echo "--- End Stream ---"
+
+# 3. Test Unified Node Stats Stream (NEW - ALL nodes in one stream)
+echo
+echo "=== STAGE 2: Unified Node Stats Stream (NEW) ==="
 echo "[*] Connecting to UNIFIED Node Stats Stream (will run for 5 seconds)..."
 echo "    URL: $API_URL/metrics/nodes/stats/stream?token=...&interval=2"
 echo "    NOTE: This stream shows stats for ALL nodes (Master + Remote) in one unified format."
@@ -30,7 +42,7 @@ timeout 5 curl -N -s "$API_URL/metrics/nodes/stats/stream?token=$TOKEN&interval=
 echo
 echo "--- End Stream ---"
 
-# 2b. Quick REST check for /nodes/ API (backward compat)
+# 4. Quick REST check for /nodes/ API (backward compat)
 echo
 echo "[*] Verifying /nodes/ REST API (backward compat)..."
 NODES_JSON=$(curl -s -X GET "$API_URL/nodes/" -H "Authorization: Bearer $TOKEN")
