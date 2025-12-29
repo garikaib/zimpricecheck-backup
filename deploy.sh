@@ -434,7 +434,8 @@ echo "    Python version: $PYTHON_VERSION"
 
 # Check for required packages
 MISSING_PKGS=""
-if ! python3 -c "import venv" 2>/dev/null; then
+# Check for ensurepip specifically (often missing in bare python3)
+if ! python3 -c "import ensurepip" 2>/dev/null; then
     MISSING_PKGS="$MISSING_PKGS python${PYTHON_VERSION}-venv"
 fi
 if ! command -v zstd &>/dev/null; then
@@ -456,9 +457,24 @@ cd "$INSTALL_DIR"
 zstd -d -c bundle.tar.zst | tar -xf -
 
 echo "[*] Setting up Python venv..."
+# Recreate venv if pip is missing (broken install)
+if [ -d "venv" ] && [ ! -f "venv/bin/pip" ]; then
+    echo "    Found broken venv (missing pip). Recreating..."
+    rm -rf venv
+fi
+
 if [ ! -d "venv" ]; then 
     python3 -m venv venv
+    # Check if creation succeeded
+    if [ ! -f "venv/bin/pip" ]; then
+        echo "Error: Failed to create venv with pip. Trying without pip then installing manually..."
+        python3 -m venv venv --without-pip
+        curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+        ./venv/bin/python3 get-pip.py
+        rm get-pip.py
+    fi
 fi
+
 ./venv/bin/pip install --upgrade pip -q
 ./venv/bin/pip install -r requirements.txt -q
 if [ -f "daemon/requirements.txt" ]; then
