@@ -447,52 +447,35 @@ if ! command -v pip3 &>/dev/null; then
     MISSING_PKGS="$MISSING_PKGS python3-pip"
 fi
 
-# Build dependencies for compiling wheels (pydantic-core, etc)
-# Required when wheels aren't available for newer Python versions (3.13+)
-if ! command -v cargo &>/dev/null; then
-    MISSING_PKGS="$MISSING_PKGS cargo rustc"
-fi
-if ! dpkg -s build-essential &>/dev/null; then
-    MISSING_PKGS="$MISSING_PKGS build-essential"
-fi
-if ! dpkg -s python3-dev &>/dev/null; then
-    MISSING_PKGS="$MISSING_PKGS python3-dev"
-fi
-
-# Install missing packages
-if [ -n "$MISSING_PKGS" ]; then
-    echo "[*] Installing missing packages:$MISSING_PKGS"
-    sudo apt-get update -qq
-    sudo apt-get install -y $MISSING_PKGS
-fi
-
-echo "[*] Extracting NODE bundle..."
-cd "$INSTALL_DIR"
-zstd -d -c bundle.tar.zst | tar -xf -
-
-echo "[*] Setting up Python venv..."
-# Recreate venv if pip is missing (broken install)
-if [ -d "venv" ] && [ ! -f "venv/bin/pip" ]; then
-    echo "    Found broken venv (missing pip). Recreating..."
-    rm -rf venv
-fi
-
-if [ ! -d "venv" ]; then 
-    python3 -m venv venv
-    # Check if creation succeeded
-    if [ ! -f "venv/bin/pip" ]; then
-        echo "Error: Failed to create venv with pip. Trying without pip then installing manually..."
-        python3 -m venv venv --without-pip
-        curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-        ./venv/bin/python3 get-pip.py
-        rm get-pip.py
+# Build dependencies function (only installed if needed)
+install_build_deps() {
+    echo "[!] pip install failed. Likely missing build tools for Python $PYTHON_VERSION wheels."
+    echo "[*] Installing build dependencies (cargo, rustc, dev tools)..."
+    MISSING_DEPS=""
+    if ! command -v cargo &>/dev/null; then MISSING_DEPS="$MISSING_DEPS cargo rustc"; fi
+    if ! dpkg -s build-essential &>/dev/null; then MISSING_DEPS="$MISSING_DEPS build-essential"; fi
+    if ! dpkg -s python3-dev &>/dev/null; then MISSING_DEPS="$MISSING_DEPS python3-dev"; fi
+    
+    if [ -n "$MISSING_DEPS" ]; then
+        sudo apt-get update -qq
+        sudo apt-get install -y $MISSING_DEPS
     fi
+}
+
+echo "[*] Installing dependencies..."
+./venv/bin/pip install --upgrade pip -q
+if ! ./venv/bin/pip install -r requirements.txt -q; then
+    install_build_deps
+    echo "[*] Retrying installation with build tools..."
+    ./venv/bin/pip install -r requirements.txt -q
 fi
 
-./venv/bin/pip install --upgrade pip -q
-./venv/bin/pip install -r requirements.txt -q
 if [ -f "daemon/requirements.txt" ]; then
-    ./venv/bin/pip install -r daemon/requirements.txt -q
+    if ! ./venv/bin/pip install -r daemon/requirements.txt -q; then
+        install_build_deps
+        echo "[*] Retrying daemon deps with build tools..."
+        ./venv/bin/pip install -r daemon/requirements.txt -q
+    fi
 fi
 
 echo "[*] Creating work directories..."
