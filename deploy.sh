@@ -1,10 +1,20 @@
 #!/bin/bash
 # Deployment Script (SaaS Ready)
 # Usage: ./deploy.sh [node|master] [--new] [--auto-approve]
+#        ./deploy.sh  (interactive menu)
 
 set -e
 
-MODE="${1:-node}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGETS_FILE="$SCRIPT_DIR/.deploy_targets.json"
+
+# Initialize targets file if missing
+if [ ! -f "$TARGETS_FILE" ]; then
+    echo '{"masters":[],"nodes":[]}' > "$TARGETS_FILE"
+fi
+
+# Parse arguments
+MODE="$1"
 ARG2="$2"
 ARG3="$3"
 
@@ -18,8 +28,223 @@ for arg in "$@"; do
     esac
 done
 
+# ==================== INTERACTIVE MENU ====================
+show_main_menu() {
+    clear
+    echo "╔═══════════════════════════════════════════════════╗"
+    echo "║       WordPress Backup Deployment Tool            ║"
+    echo "╚═══════════════════════════════════════════════════╝"
+    echo ""
+    echo "1. Deploy Master"
+    echo "2. Deploy Node"
+    echo "3. View Saved Targets"
+    echo "0. Exit"
+    echo ""
+    read -p "Select option: " MENU_CHOICE
+    
+    case $MENU_CHOICE in
+        1) select_master_target ;;
+        2) select_node_target ;;
+        3) view_saved_targets ;;
+        0) exit 0 ;;
+        *) show_main_menu ;;
+    esac
+}
+
+view_saved_targets() {
+    echo ""
+    echo "=== Saved Deployment Targets ==="
+    echo ""
+    echo "Masters:"
+    cat "$TARGETS_FILE" | python3 -c "import sys,json; d=json.load(sys.stdin); [print(f'  - {m[\"name\"]}: {m[\"user\"]}@{m[\"host\"]}:{m[\"port\"]}') for m in d.get('masters',[])]" 2>/dev/null || echo "  (none)"
+    echo ""
+    echo "Nodes:"
+    cat "$TARGETS_FILE" | python3 -c "import sys,json; d=json.load(sys.stdin); [print(f'  - {n[\"name\"]}: {n[\"user\"]}@{n[\"host\"]}:{n[\"port\"]}') for n in d.get('nodes',[])]" 2>/dev/null || echo "  (none)"
+    echo ""
+    read -p "Press Enter to continue..."
+    show_main_menu
+}
+
+select_master_target() {
+    echo ""
+    echo "=== Deploy Master ==="
+    
+    # Load saved masters
+    MASTERS=$(cat "$TARGETS_FILE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('masters',[])))" 2>/dev/null || echo "0")
+    
+    if [ "$MASTERS" -gt 0 ]; then
+        echo ""
+        echo "Saved masters:"
+        cat "$TARGETS_FILE" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+for i,m in enumerate(d.get('masters',[]),1):
+    print(f'  {i}. {m[\"name\"]} ({m[\"user\"]}@{m[\"host\"]}:{m[\"port\"]})')
+"
+        echo "  N. Add new master"
+        echo "  0. Back"
+        echo ""
+        read -p "Select: " SEL
+        
+        if [ "$SEL" = "0" ]; then
+            show_main_menu
+            return
+        elif [ "$SEL" = "N" ] || [ "$SEL" = "n" ]; then
+            add_new_master
+            return
+        else
+            # Load selected master config
+            eval $(cat "$TARGETS_FILE" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+idx=int('$SEL')-1
+if 0 <= idx < len(d.get('masters',[])):
+    m=d['masters'][idx]
+    print(f'REMOTE_HOST=\"{m[\"host\"]}\"')
+    print(f'REMOTE_USER=\"{m[\"user\"]}\"')
+    print(f'REMOTE_PORT=\"{m[\"port\"]}\"')
+    print(f'REMOTE_DIR=\"{m.get(\"dir\",\"/opt/wordpress-backup\")}\"')
+")
+            confirm_and_deploy "master"
+        fi
+    else
+        add_new_master
+    fi
+}
+
+add_new_master() {
+    echo ""
+    echo "=== Add New Master Target ==="
+    read -p "Name (e.g., 'production'): " TARGET_NAME
+    read -p "Host [wp.zimpricecheck.com]: " REMOTE_HOST
+    REMOTE_HOST="${REMOTE_HOST:-wp.zimpricecheck.com}"
+    read -p "User [ubuntu]: " REMOTE_USER
+    REMOTE_USER="${REMOTE_USER:-ubuntu}"
+    read -p "SSH Port [2200]: " REMOTE_PORT
+    REMOTE_PORT="${REMOTE_PORT:-2200}"
+    read -p "Remote Dir [/opt/wordpress-backup]: " REMOTE_DIR
+    REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
+    
+    # Save to targets file
+    python3 -c "
+import json
+with open('$TARGETS_FILE','r') as f: d=json.load(f)
+d.setdefault('masters',[]).append({'name':'$TARGET_NAME','host':'$REMOTE_HOST','user':'$REMOTE_USER','port':'$REMOTE_PORT','dir':'$REMOTE_DIR'})
+with open('$TARGETS_FILE','w') as f: json.dump(d,f,indent=2)
+"
+    echo "✅ Saved target: $TARGET_NAME"
+    
+    IS_NEW=true
+    confirm_and_deploy "master"
+}
+
+select_node_target() {
+    echo ""
+    echo "=== Deploy Node ==="
+    
+    NODES=$(cat "$TARGETS_FILE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('nodes',[])))" 2>/dev/null || echo "0")
+    
+    if [ "$NODES" -gt 0 ]; then
+        echo ""
+        echo "Saved nodes:"
+        cat "$TARGETS_FILE" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+for i,n in enumerate(d.get('nodes',[]),1):
+    print(f'  {i}. {n[\"name\"]} ({n[\"user\"]}@{n[\"host\"]}:{n[\"port\"]})')
+"
+        echo "  N. Add new node"
+        echo "  0. Back"
+        echo ""
+        read -p "Select: " SEL
+        
+        if [ "$SEL" = "0" ]; then
+            show_main_menu
+            return
+        elif [ "$SEL" = "N" ] || [ "$SEL" = "n" ]; then
+            add_new_node
+            return
+        else
+            eval $(cat "$TARGETS_FILE" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+idx=int('$SEL')-1
+if 0 <= idx < len(d.get('nodes',[])):
+    n=d['nodes'][idx]
+    print(f'REMOTE_HOST=\"{n[\"host\"]}\"')
+    print(f'REMOTE_USER=\"{n[\"user\"]}\"')
+    print(f'REMOTE_PORT=\"{n[\"port\"]}\"')
+    print(f'REMOTE_DIR=\"{n.get(\"dir\",\"/opt/wordpress-backup\")}\"')
+")
+            confirm_and_deploy "node"
+        fi
+    else
+        add_new_node
+    fi
+}
+
+add_new_node() {
+    echo ""
+    echo "=== Add New Node Target ==="
+    read -p "Name (e.g., 'node-api'): " TARGET_NAME
+    read -p "Host: " REMOTE_HOST
+    read -p "User [ubuntu]: " REMOTE_USER
+    REMOTE_USER="${REMOTE_USER:-ubuntu}"
+    read -p "SSH Port [22]: " REMOTE_PORT
+    REMOTE_PORT="${REMOTE_PORT:-22}"
+    read -p "Remote Dir [/opt/wordpress-backup]: " REMOTE_DIR
+    REMOTE_DIR="${REMOTE_DIR:-/opt/wordpress-backup}"
+    
+    python3 -c "
+import json
+with open('$TARGETS_FILE','r') as f: d=json.load(f)
+d.setdefault('nodes',[]).append({'name':'$TARGET_NAME','host':'$REMOTE_HOST','user':'$REMOTE_USER','port':'$REMOTE_PORT','dir':'$REMOTE_DIR'})
+with open('$TARGETS_FILE','w') as f: json.dump(d,f,indent=2)
+"
+    echo "✅ Saved target: $TARGET_NAME"
+    
+    IS_NEW=true
+    confirm_and_deploy "node"
+}
+
+confirm_and_deploy() {
+    local deploy_mode="$1"
+    echo ""
+    echo "=== Deployment Configuration ==="
+    echo "  Mode: $deploy_mode"
+    echo "  Host: $REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT"
+    echo "  Dir:  $REMOTE_DIR"
+    [ "$IS_NEW" = true ] && echo "  Fresh: YES (will prompt for config)"
+    echo ""
+    read -p "Deploy now? [Y/n/e(dit)]: " CONFIRM
+    
+    case $CONFIRM in
+        n|N) show_main_menu ;;
+        e|E) 
+            read -p "Host [$REMOTE_HOST]: " NEW_HOST
+            REMOTE_HOST="${NEW_HOST:-$REMOTE_HOST}"
+            read -p "User [$REMOTE_USER]: " NEW_USER
+            REMOTE_USER="${NEW_USER:-$REMOTE_USER}"
+            read -p "Port [$REMOTE_PORT]: " NEW_PORT
+            REMOTE_PORT="${NEW_PORT:-$REMOTE_PORT}"
+            confirm_and_deploy "$deploy_mode"
+            ;;
+        *)
+            MODE="$deploy_mode"
+            export REMOTE_HOST REMOTE_USER REMOTE_PORT REMOTE_DIR
+            ;;
+    esac
+}
+
+# Show menu if no arguments provided
+if [ -z "$MODE" ]; then
+    show_main_menu
+fi
+
+# Validate mode if provided via CLI
 if [[ "$MODE" != "node" && "$MODE" != "master" ]]; then
     echo "Usage: ./deploy.sh [node|master] [--new] [--auto-approve]"
+    echo "       ./deploy.sh  (interactive menu)"
     echo ""
     echo "Flags:"
     echo "  --new          Fresh deployment with interactive config"
