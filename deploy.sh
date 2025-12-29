@@ -702,6 +702,16 @@ with engine.connect() as conn:
         ./venv/bin/alembic upgrade head || echo "[!] Alembic migration failed, continuing..."
     fi
 
+# Ensure SECRET_KEY exists in .env (critical for JWT security)
+echo "[*] Checking SECRET_KEY..."
+if ! grep -q "^SECRET_KEY=" "$INSTALL_DIR/.env" 2>/dev/null; then
+    echo "    Generating new SECRET_KEY..."
+    echo "SECRET_KEY=$(openssl rand -hex 32)" >> "$INSTALL_DIR/.env"
+    echo "    SECRET_KEY added to .env"
+else
+    echo "    SECRET_KEY already configured"
+fi
+
 # Fix permissions BEFORE init_db (SQLite needs write on directory + file for journal)
 echo "[*] Setting database permissions..."
 sudo chown -R "$REMOTE_USER":"$REMOTE_USER" "$INSTALL_DIR"
