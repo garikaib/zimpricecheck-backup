@@ -252,6 +252,45 @@ if [[ "$MODE" != "node" && "$MODE" != "master" ]]; then
     exit 1
 fi
 
+# If not --new, try to load saved target for this mode
+if [ "$IS_NEW" != true ]; then
+    if [ "$MODE" == "master" ]; then
+        # Load last master target
+        SAVED=$(cat "$TARGETS_FILE" 2>/dev/null | python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    masters=d.get('masters',[])
+    if len(masters) > 0:
+        m=masters[-1]  # Use last saved
+        print(f\"REMOTE_HOST={m['host']} REMOTE_USER={m['user']} REMOTE_PORT={m['port']} REMOTE_DIR={m['dir']}\")
+except:
+    pass
+" 2>/dev/null)
+        if [ -n "$SAVED" ]; then
+            eval "export $SAVED"
+            echo "[*] Using saved master target: $REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT"
+        fi
+    else
+        # Load last node target
+        SAVED=$(cat "$TARGETS_FILE" 2>/dev/null | python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    nodes=d.get('nodes',[])
+    if len(nodes) > 0:
+        n=nodes[-1]  # Use last saved
+        print(f\"REMOTE_HOST={n['host']} REMOTE_USER={n['user']} REMOTE_PORT={n['port']} REMOTE_DIR={n['dir']}\")
+except:
+    pass
+" 2>/dev/null)
+        if [ -n "$SAVED" ]; then
+            eval "export $SAVED"
+            echo "[*] Using saved node target: $REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT"
+        fi
+    fi
+fi
+
 # Fresh deployment prompts
 prompt_master_config() {
     echo ""
