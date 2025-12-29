@@ -65,10 +65,21 @@ def load_config() -> DaemonConfig:
     """
     mode = detect_mode()
     
+    # Try to load API key from config file if not in env
+    api_key = os.getenv("BACKUPD_API_KEY")
+    if not api_key:
+        config_file = os.getenv("BACKUPD_CONFIG", "/etc/backupd/config")
+        if os.path.exists(config_file):
+            with open(config_file) as f:
+                for line in f:
+                    if line.startswith("api_key="):
+                        api_key = line.split("=", 1)[1].strip()
+                        break
+    
     config = DaemonConfig(
         mode=mode,
         master_url=os.getenv("BACKUPD_MASTER_URL"),
-        node_api_key=os.getenv("BACKUPD_API_KEY"),
+        node_api_key=api_key,
         data_dir=os.getenv("BACKUPD_DATA_DIR", "/var/lib/backupd"),
         max_io_concurrent=int(os.getenv("BACKUPD_MAX_IO", "2")),
         max_network_concurrent=int(os.getenv("BACKUPD_MAX_NETWORK", "1")),
@@ -78,3 +89,4 @@ def load_config() -> DaemonConfig:
     )
     
     return config
+

@@ -18,38 +18,52 @@ def request_join(
 ) -> Any:
     """
     Public Endpoint: Submit a request to join the cluster.
-    Returns a Request ID to poll for status.
+    Returns a 5-char registration code for admin to approve.
     """
     # Check if hostname already exists
     existing = db.query(models.Node).filter(models.Node.hostname == node_in.hostname).first()
     if existing:
         if existing.status == models.NodeStatus.ACTIVE:
-             return {"request_id": "ALREADY_ACTIVE", "message": "Node already registered and active."}
+            return {
+                "request_id": str(existing.id),
+                "registration_code": "ACTIVE",
+                "message": "Node already registered and active."
+            }
         elif existing.status == models.NodeStatus.BLOCKED:
-             raise HTTPException(status_code=403, detail="Node is blocked from joining.")
+            raise HTTPException(status_code=403, detail="Node is blocked from joining.")
         else:
-            # Pending or inactive, return existing ID (or re-generate?)
-            # For simplicity, we assume we return the existing node's API key is NOT returned here.
-            # We return a placeholder request ID (hashed ID?) or just the ID.
-            # Let's use ID as request ID for now.
-            return {"request_id": str(existing.id), "message": "Request already pending."}
+            # Pending - return existing code
+            return {
+                "request_id": str(existing.id),
+                "registration_code": existing.registration_code or "PEND",
+                "message": "Request already pending. Use existing code."
+            }
 
+    # Generate 5-char registration code (uppercase alphanumeric)
+    import random
+    import string
+    registration_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    
     # Create new Pending Node
-    # api_key is generated but NOT returned yet.
     api_key = secrets.token_urlsafe(32)
     
     node = models.Node(
         hostname=node_in.hostname,
         ip_address=node_in.ip_address,
         api_key=api_key,
+        registration_code=registration_code,
         status=models.NodeStatus.PENDING,
-        storage_quota_gb=100
+        storage_quota_gb=0  # Start at 0, admin allocates later
     )
     db.add(node)
     db.commit()
     db.refresh(node)
     
-    return {"request_id": str(node.id), "message": "Join request submitted. Waiting for approval."}
+    return {
+        "request_id": str(node.id),
+        "registration_code": registration_code,
+        "message": f"Join request submitted. Give code {registration_code} to admin."
+    }
 
 @router.get("/status/{request_id}", response_model=schemas.NodeStatusResponse)
 def check_status(
@@ -57,9 +71,8 @@ def check_status(
     db: Session = Depends(deps.get_db),
 ) -> Any:
     """
-    Public Endpoint: Check status of a join request.
-    If APPROVED, returns the API Key (one-time show? or always? Secure enough for this context?)
-    Ideally one-time, but for now we return it if status is ACTIVE.
+    Public Endpoint: Check status of a join request by ID.
+    If APPROVED, returns the API Key.
     """
     try:
         node_id = int(request_id)
@@ -70,10 +83,39 @@ def check_status(
     if not node:
         raise HTTPException(status_code=404, detail="Request not found")
     
-    response = {"status": node.status}
+    response = {"status": node.status.value}
     
     if node.status == models.NodeStatus.ACTIVE:
         response["api_key"] = node.api_key
+        
+    return response
+
+
+@router.get("/status/code/{code}", response_model=schemas.NodeStatusResponse)
+def check_status_by_code(
+    code: str,
+    db: Session = Depends(deps.get_db),
+) -> Any:
+    """
+    Public Endpoint: Check status of a join request by registration code.
+    Node polls this endpoint until status becomes ACTIVE.
+    """
+    code = code.strip().upper()
+    
+    node = db.query(models.Node).filter(
+        models.Node.registration_code == code
+    ).first()
+    
+    if not node:
+        raise HTTPException(status_code=404, detail="No node with this code")
+    
+    response = {"status": node.status.value}
+    
+    if node.status == models.NodeStatus.ACTIVE:
+        response["api_key"] = node.api_key
+        # Clear the code after first successful retrieval
+        node.registration_code = None
+        db.commit()
         
     return response
 

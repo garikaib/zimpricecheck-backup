@@ -169,15 +169,24 @@ class BackupDaemon:
         """
         Run in node mode.
         
-        - Polls master for pending jobs
-        - Executes backup jobs
-        - Reports status back to master
+        If no API key: Request to join, display code, poll until approved.
+        If API key: Start normal operation (poll for jobs, report stats).
         """
         logger.info(f"Node mode: Master URL = {self.config.master_url}")
         
+        # If no API key, we need to register first
         if not self.config.node_api_key:
-            logger.error("No API key configured. Generate one on the master server.")
-            return
+            logger.info("No API key found. Starting registration process...")
+            api_key = await self._register_with_master()
+            if not api_key:
+                logger.error("Registration failed. Exiting.")
+                return
+            self.config.node_api_key = api_key
+            # Save API key to config file for future runs
+            self._save_api_key(api_key)
+        
+        # API key available, start normal operation
+        logger.info("Node registered and active. Starting stats reporting and job polling.")
         
         # Start stats reporting in background
         asyncio.create_task(self._report_stats_loop())
@@ -192,6 +201,115 @@ class BackupDaemon:
             except Exception as e:
                 logger.error(f"Node loop error: {e}")
                 await asyncio.sleep(60)
+    
+    async def _register_with_master(self) -> str:
+        """
+        Register this node with the master server.
+        Returns the API key on success, None on failure.
+        """
+        import httpx
+        import socket
+        
+        hostname = socket.gethostname()
+        ip_address = socket.gethostbyname(hostname)
+        
+        logger.info(f"Requesting to join master as '{hostname}'...")
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                # Step 1: Request to join
+                resp = await client.post(
+                    f"{self.config.master_url}/api/v1/nodes/join-request",
+                    json={"hostname": hostname, "ip_address": ip_address},
+                    timeout=30
+                )
+                
+                if resp.status_code != 200:
+                    logger.error(f"Join request failed: {resp.status_code} - {resp.text}")
+                    return None
+                
+                data = resp.json()
+                code = data.get("registration_code")
+                
+                if code == "ACTIVE":
+                    logger.info("Node already registered and active.")
+                    # Fetch API key if already active (edge case)
+                    return None  # Will need manual key entry
+                
+                # Step 2: Display the code for admin
+                print("\n" + "=" * 50)
+                print(f"  REGISTRATION CODE: {code}")
+                print("=" * 50)
+                print(f"  Enter this code in the master dashboard")
+                print(f"  to approve this node ({hostname})")
+                print("=" * 50 + "\n")
+                logger.info(f"Registration code: {code} - Waiting for admin approval...")
+                
+                # Step 3: Poll for approval
+                while self.running and not self._shutdown_event.is_set():
+                    await asyncio.sleep(10)  # Poll every 10 seconds
+                    
+                    try:
+                        status_resp = await client.get(
+                            f"{self.config.master_url}/api/v1/nodes/status/code/{code}",
+                            timeout=15
+                        )
+                        
+                        if status_resp.status_code == 404:
+                            logger.warning("Code no longer valid. May have been rejected.")
+                            return None
+                        
+                        if status_resp.status_code == 200:
+                            status_data = status_resp.json()
+                            if status_data.get("status") == "active":
+                                logger.info("Node approved by admin!")
+                                return status_data.get("api_key")
+                            else:
+                                logger.debug(f"Still pending... status={status_data.get('status')}")
+                    
+                    except Exception as poll_err:
+                        logger.warning(f"Poll error: {poll_err}")
+                    
+        except Exception as e:
+            logger.error(f"Registration error: {e}")
+            return None
+        
+        return None
+    
+    def _save_api_key(self, api_key: str):
+        """Save the API key to config file for persistence."""
+        import os
+        config_dir = "/etc/backupd"
+        config_file = f"{config_dir}/config"
+        
+        try:
+            os.makedirs(config_dir, exist_ok=True)
+            
+            # Read existing config or create new
+            lines = []
+            if os.path.exists(config_file):
+                with open(config_file, 'r') as f:
+                    lines = f.readlines()
+            
+            # Update or add API key
+            key_line = f"api_key={api_key}\n"
+            found = False
+            for i, line in enumerate(lines):
+                if line.startswith("api_key="):
+                    lines[i] = key_line
+                    found = True
+                    break
+            if not found:
+                lines.append(key_line)
+            
+            with open(config_file, 'w') as f:
+                f.writelines(lines)
+            
+            logger.info(f"API key saved to {config_file}")
+            
+        except Exception as e:
+            logger.warning(f"Could not save API key to config: {e}")
+            logger.info(f"Set BACKUPD_API_KEY={api_key} in environment instead.")
     
     async def run_job(self, job_id: str):
         """Execute a backup job."""

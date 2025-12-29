@@ -112,6 +112,7 @@ class NodeJoinRequest(NodeBase):
 
 class NodeJoinResponse(BaseModel):
     request_id: str
+    registration_code: str  # 5-char code for admin to enter
     message: str
 
 class NodeStatusResponse(BaseModel):
