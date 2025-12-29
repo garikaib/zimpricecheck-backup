@@ -1,21 +1,77 @@
 # Nodes API
 
-Node management and quota status.
+Node management, registration, and quota status.
 
 ## Endpoints Overview
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| GET | `/nodes/` | List nodes | All Users |
+| POST | `/nodes/join-request` | Node requests to join cluster | **Public** |
+| GET | `/nodes/status/code/{code}` | Node polls for approval status | **Public** |
+| POST | `/nodes/approve/{id}` | Approve pending node | Super Admin |
+| POST | `/nodes/register-by-code` | Approve node by entering code | Super Admin |
+| GET | `/nodes/` | List all nodes (includes pending) | All Users |
 | GET | `/nodes/{id}` | Get node details | Node Admin+ |
 | PUT | `/nodes/{id}/quota` | Update quota | Super Admin |
 | GET | `/nodes/{id}/quota/status` | Quota status | Node Admin+ |
 | GET | `/nodes/{id}/sites` | List node sites | Node Admin+ |
 | GET | `/nodes/{id}/backups` | List node backups | Node Admin+ |
-| POST | `/nodes/join-request` | Request join | Public |
-| POST | `/nodes/approve/{id}` | Approve node | Super Admin |
-| **SSE** | `/metrics/nodes/stats/stream` | **Real-time stats for ALL nodes** | Node Admin+ |
-| **SSE** | `/metrics/nodes/{id}/stats/stream` | **Real-time stats for single node** | Node Admin+ |
+| **SSE** | `/metrics/nodes/stats/stream` | Real-time stats for ALL nodes | Node Admin+ |
+| **SSE** | `/metrics/nodes/{id}/stats/stream` | Real-time stats for single node | Node Admin+ |
+
+---
+
+## Node Registration Flow
+
+### 1. POST /nodes/join-request
+
+Node calls this on startup to register with the cluster. No authentication required.
+
+**Request:**
+```json
+{
+  "hostname": "api.example.com",
+  "ip_address": "192.168.1.100",
+  "system_info": "Ubuntu 22.04"
+}
+```
+
+**Response:**
+```json
+{
+  "request_id": "42",
+  "registration_code": "XK7M2",
+  "message": "Join request submitted. Give code XK7M2 to admin."
+}
+```
+
+### 2. GET /nodes/status/code/{code}
+
+Node polls this endpoint to check if approved.
+
+**Response (Pending):**
+```json
+{
+  "status": "pending",
+  "api_key": null
+}
+```
+
+**Response (Approved):**
+```json
+{
+  "status": "active",
+  "api_key": "eyJ0eXAiOiJKV1Q..."
+}
+```
+
+> **Note:** The registration code is cleared after the API key is retrieved.
+
+### 3. POST /nodes/approve/{id}
+
+Admin approves a pending node by ID.
+
+**Response:** `NodeResponse` with status `active`.
 
 ---
 
